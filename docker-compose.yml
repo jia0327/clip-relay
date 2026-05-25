@@ -1,0 +1,25 @@
+# ClipRelay Docker Compose
+#
+# 两种方式使用：
+#   1. 本地开发：直接 docker compose up -d
+#   2. N1/OpenWRT 构建：docker compose -f docker-compose.yml build
+#      如果 npm registry 被 DNS 拦截（EAI_AGAIN），需要先添加 registry 镜像
+
+services:
+  clip-relay:
+    build:
+      context: .
+      # N1 等 OpenWRT 设备：DNS 代理可能拦截容器 DNS，需要 host 网络模式构建
+      # 如果遇到 npm ERR! EAI_AGAIN，取消下面这行的注释：
+      # network: host
+    ports:
+      - "3000:3000"
+    volumes:
+      - clip-relay-data:/app/data
+    restart: unless-stopped
+    environment:
+      - PORT=3000
+      - NODE_ENV=production
+
+volumes:
+  clip-relay-data:
