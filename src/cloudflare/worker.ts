@@ -77,7 +77,7 @@ async function getSetting(key: string): Promise<string | null> {
 }
 
 async function setSetting(key: string, value: string) {
-  await (globalThis as any).env.DB.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(key, value);
+  await (globalThis as any).env.DB.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').bind(key, value).run();
 }
 
 async function handleLogin(request: Request, env: Env): Promise<Response> {
@@ -184,7 +184,7 @@ async function handleCreateRoom(request: Request): Promise<Response> {
   await (globalThis as any).env.DB.prepare(`
     INSERT OR REPLACE INTO rooms (token, name, ttl_minutes, created_at, disabled)
     VALUES (?, ?, ?, ?, 0)
-  `).run(token, body.name, ttl, createdAt);
+  `).bind(token, body.name, ttl, createdAt).run();
 
   return new Response(JSON.stringify({ token, name: body.name, ttl_minutes: ttl, created_at: createdAt, disabled: 0 }), {
     status: 201,
@@ -202,13 +202,13 @@ async function handleDeleteRoom(url: URL, request: Request): Promise<Response> {
   const token = decodeURIComponent(parts[4]);
 
   if (parts.length === 6 && parts[5] === 'messages') {
-    await (globalThis as any).env.DB.prepare('DELETE FROM messages WHERE room_token = ?').run(token);
+    await (globalThis as any).env.DB.prepare('DELETE FROM messages WHERE room_token = ?').bind(token).run();
     return new Response(JSON.stringify({ ok: true }), { headers: { 'Content-Type': 'application/json' } });
   }
 
   if (parts.length === 5 && token) {
-    await (globalThis as any).env.DB.prepare('DELETE FROM rooms WHERE token = ?').run(token);
-    await (globalThis as any).env.DB.prepare('DELETE FROM messages WHERE room_token = ?').run(token);
+    await (globalThis as any).env.DB.prepare('DELETE FROM rooms WHERE token = ?').bind(token).run();
+    await (globalThis as any).env.DB.prepare('DELETE FROM messages WHERE room_token = ?').bind(token).run();
     return new Response(JSON.stringify({ ok: true }), { headers: { 'Content-Type': 'application/json' } });
   }
 
@@ -232,7 +232,7 @@ async function handleToggleRoom(request: Request): Promise<Response> {
   }
 
   const newDisabled = room.disabled ? 0 : 1;
-  await (globalThis as any).env.DB.prepare('UPDATE rooms SET disabled = ? WHERE token = ?').run(newDisabled, body.token);
+  await (globalThis as any).env.DB.prepare('UPDATE rooms SET disabled = ? WHERE token = ?').bind(newDisabled, body.token).run();
 
   return new Response(JSON.stringify({ ok: true, disabled: newDisabled }), { headers: { 'Content-Type': 'application/json' } });
 }
