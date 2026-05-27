@@ -6,10 +6,10 @@ function getDB() {
   return (globalThis as any).env.DB;
 }
 
-export function createSession(): string {
+export async function createSession(): Promise<string> {
   const token = Date.now().toString(36) + crypto.randomUUID().substring(0, 8);
   const now = new Date().toISOString();
-  getDB().prepare('INSERT INTO sessions (token, created_at) VALUES (?, ?)').bind(token, now).run();
+  await getDB().prepare('INSERT INTO sessions (token, created_at) VALUES (?, ?)').bind(token, now).run();
   return token;
 }
 

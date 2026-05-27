@@ -55,7 +55,7 @@ async function handleLogin(request: Request, env: Env): Promise<Response> {
   // 密码匹配
   if (inputHash === storedHash) {
     await clearRateLimit(ip);
-    const sessionToken = createSession();
+    const sessionToken = await createSession();
     return new Response(JSON.stringify({ token: sessionToken }), {
       headers: { 'Content-Type': 'application/json' }
     });
@@ -65,7 +65,7 @@ async function handleLogin(request: Request, env: Env): Promise<Response> {
   if (env.RESET_KEY && body.password === env.RESET_KEY) {
     await setSetting('admin_password', await hashPassword('admin'));
     await clearRateLimit(ip);
-    const sessionToken = createSession();
+    const sessionToken = await createSession();
     return new Response(JSON.stringify({ token: sessionToken, recovered: true, message: '密码已重置为 admin，请及时修改密码' }), {
       headers: { 'Content-Type': 'application/json' }
     });
