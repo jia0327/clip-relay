@@ -290,7 +290,8 @@ export default {
     }
 
     // --- WebSocket Upgrade ---
-    if (path === '/ws' || path.startsWith('/ws?')) {
+    const isWsPath = path === '/ws' || path.startsWith('/ws?') || path === '/' || path.startsWith('/?');
+    if (isWsPath && request.headers.get('Upgrade') === 'websocket') {
       const token = url.searchParams.get('token');
       if (!token) {
         return new Response('Missing token', { status: 400 });
