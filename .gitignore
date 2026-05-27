@@ -1,8 +1,15 @@
 node_modules/
 data/
-CLAUDE.md/
 .env
 *.log
 .DS_Store
 .vscode/
 .idea/
+.claude/
+.codegraph/
+project/
+other.md
+CLAUDE.md
+deploy/cloudflare/.wrangler/
+deploy/cloudflare/package-lock.json
+deploy/deploy-n1.sh
