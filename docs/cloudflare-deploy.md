@@ -57,8 +57,15 @@ Fork 本仓库，配置 3 个参数，手动触发部署。
 
 ## 完成
 
+部署完成后首次访问时，系统会自动初始化 D1 表结构（messages、rooms、settings、sessions、rate_limits），无需手动执行 SQL。
+
 - **API 地址**: `https://clip-relay.<你的账户>.workers.dev/api/config`
 - **WebSocket**: `wss://clip-relay.<你的账户>.workers.dev/ws?token=<房间令牌>`
+- **管理员**: 初始密码为 `admin`，登录后请立即修改
+
+### 忘记密码
+
+在 Cloudflare 中修改 `RESET_KEY` 环境变量为任意值，登录页输入该值即可重置密码为 `admin`。
 
 ### 绑定自定义域名
 

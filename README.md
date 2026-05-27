@@ -180,7 +180,6 @@ npm start
   "port": 3000,
   "maxImageSize": 5242880,
   "domain": "",
-  "adminPassword": "",
   "resetKey": ""
 }
 ```
@@ -191,10 +190,9 @@ npm start
 | `port` | 服务端口 |
 | `maxImageSize` | 单张图片最大字节数（默认 5MB） |
 | `domain` | 公网域名（Cloudflare 部署时使用） |
-| `adminPassword` | 管理员密码（留空则首次启动随机生成） |
-| `resetKey` | 密码重置密钥（32 位随机字符串，输入即重置密码为 `admin`） |
+| `resetKey` | 密码重置密钥（32 位随机字符串，首次启动自动生成） |
 
-> **忘记密码**：在登录页输入 `resetKey` 即可重置密码为 `admin`。`resetKey` 在 `config.json` 中查看，或首次启动时终端打印。
+> **忘记密码**：在登录页输入 `resetKey` 即可重置密码为 `admin`。`resetKey` 在 `config/config.json` 中查看，或首次启动时终端打印。
 
 ---
 
