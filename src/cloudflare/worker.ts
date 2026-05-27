@@ -348,6 +348,11 @@ export default {
       return new Response(ADMIN_HTML, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
     }
 
+    // Root without token → redirect to admin
+    if ((path === '/' || path === '/index.html') && !url.searchParams.has('token')) {
+      return Response.redirect(`${url.origin}/admin`, 302);
+    }
+
     return new Response(INDEX_HTML, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
   }
 };
