@@ -60,9 +60,13 @@ docker compose up -d
 2. [Cloudflare D1](https://dash.cloudflare.com/?to=/:account/d1) → 创建数据库 `clip-relay` → 复制 **Database ID**
 3. [API Tokens](https://dash.cloudflare.com/profile/api-tokens) → 创建令牌 → **编辑 Cloudflare Workers** → 权限新增 **账户-D1-编辑** → 复制 **Token**
 4. Fork 的仓库 → Settings → Secrets → 添加三个：
-   - `D1_DATABASE_ID`
-   - `CF_ACCOUNT_ID`
-   - `CF_API_TOKEN`
+
+   | Secret | 值 |
+   |--------|-----|
+   | `D1_DATABASE_ID` | 步骤 2 的 Database ID |
+   | `CF_ACCOUNT_ID` | Cloudflare 首页右侧或 Workers 页面 URL 中的 32 位 hex |
+   | `CF_API_TOKEN` | 步骤 3 的 API Token |
+
 5. Actions → Deploy to Cloudflare Workers → Run workflow
 
 部署完成后绑定自定义域名：Workers → clip-relay → Settings → Triggers → Custom Domains。
