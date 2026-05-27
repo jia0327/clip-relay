@@ -80,6 +80,26 @@ async function setSetting(key: string, value: string) {
   await (globalThis as any).env.DB.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').bind(key, value).run();
 }
 
+async function getRecoveryCodes(): Promise<string[]> {
+  const raw = await getSetting('recovery_codes');
+  if (!raw) return [];
+  try { return JSON.parse(raw); } catch { return []; }
+}
+
+async function setRecoveryCodes(codes: string[]) {
+  await setSetting('recovery_codes', JSON.stringify(codes));
+}
+
+function generateRecoveryCode(): string {
+  const chars = 'abcdefghjkmnpqrstuvwxyz23456789'; // 不含 0/o/1/l
+  const seg = () => Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+  return `${seg()}-${seg()}-${seg()}`;
+}
+
+function generateRecoveryCodes(count = 5): string[] {
+  return Array.from({ length: count }, () => generateRecoveryCode());
+}
+
 async function handleLogin(request: Request, env: Env): Promise<Response> {
   const ip = getClientIP(request);
   const limit = checkRateLimit(ip);
@@ -117,6 +137,20 @@ async function handleLogin(request: Request, env: Env): Promise<Response> {
     });
   }
 
+  // 恢复密码：匹配恢复码（一次性）
+  const codes = await getRecoveryCodes();
+  const idx = codes.indexOf(body.password);
+  if (idx !== -1) {
+    codes.splice(idx, 1);
+    await setRecoveryCodes(codes);
+    await setSetting('admin_password', inputHash);
+    rateLimitMap.delete(ip);
+    const sessionToken = createSession();
+    return new Response(JSON.stringify({ token: sessionToken, recovered: true }), {
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
   const hint = (limit as any).remaining <= 1 ? '' : '';
   return new Response(JSON.stringify({ error: `密码错误，还剩${(limit as any).remaining}次尝试${hint}` }), {
     status: 401,
@@ -140,7 +174,11 @@ async function handleChangePassword(request: Request, env: Env): Promise<Respons
 
   // 允许用恢复密码作为原密码
   if (oldInputHash !== storedHash && !(env.RESET_KEY && body.oldPassword === env.RESET_KEY)) {
-    return new Response(JSON.stringify({ error: '原密码错误' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+    // 也允许用恢复码作为原密码
+    const codes = await getRecoveryCodes();
+    if (codes.indexOf(body.oldPassword) === -1) {
+      return new Response(JSON.stringify({ error: '原密码错误' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+    }
   }
 
   const newHash = await hashPassword(body.newPassword);
@@ -275,6 +313,10 @@ export default {
       const storedHash = await getSetting('admin_password');
       if (!storedHash) {
         await setSetting('admin_password', adminHash);
+        // 首次部署时生成恢复码
+        const codes = generateRecoveryCodes(5);
+        await setRecoveryCodes(codes);
+        console.log('恢复码:', codes);
       }
     }
 
@@ -349,6 +391,21 @@ export default {
 
     if (path === '/api/admin/rooms/toggle' && request.method === 'POST') {
       return handleToggleRoom(request);
+    }
+
+    if (path === '/api/admin/recovery-codes' && request.method === 'GET') {
+      const codes = await getRecoveryCodes();
+      return new Response(JSON.stringify({ codes, count: codes.length }), { headers: { 'Content-Type': 'application/json' } });
+    }
+
+    if (path === '/api/admin/recovery-codes' && request.method === 'POST') {
+      const body = await request.json() as any;
+      if (body && body.regenerate === true) {
+        const newCodes = generateRecoveryCodes(5);
+        await setRecoveryCodes(newCodes);
+        return new Response(JSON.stringify({ codes: newCodes, count: newCodes.length }), { headers: { 'Content-Type': 'application/json' } });
+      }
+      return new Response(JSON.stringify({ error: '无效请求' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
     }
 
     if (path === '/api/admin/domain' && request.method === 'POST') {

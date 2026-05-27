@@ -218,7 +218,7 @@ body{
     <button class="btn btn-primary" id="loginBtn">登录</button>
     <p class="login-error" id="loginError"></p>
     <p style="font-size:12px;color:var(--accent);margin-top:16px;cursor:pointer;text-decoration:underline" id="forgotPwd" onclick="this.style.display='none';document.getElementById('recoveryHint').style.display='block'">忘记密码？</p>
-    <p id="recoveryHint" style="display:none;font-size:12px;color:var(--text-secondary);margin-top:8px;background:var(--bg);padding:10px 14px;border-radius:6px;text-align:left;line-height:1.6">忘记密码后，使用<strong>环境变量 RESET_KEY</strong> 或 <strong>config.json 中的 resetKey</strong> 的值作为密码登录即可恢复。<br><br>本地/Docker 部署查看 <code>config/config.json</code> 的 <code>resetKey</code> 字段；Cloudflare Workers 查看 Dashboard → Settings → Variables 中的 <code>RESET_KEY</code>。默认值与管理员密码相同。</p>
+    <p id="recoveryHint" style="display:none;font-size:12px;color:var(--text-secondary);margin-top:8px;background:var(--bg);padding:12px 14px;border-radius:6px;text-align:left;line-height:1.7">忘记密码后，使用 <strong>环境变量 <code>RESET_KEY</code></strong>、<strong><code>config.json</code> 中的 <code>resetKey</code></strong> 或 <strong>恢复码</strong> 的值作为密码登录即可恢复。<br><br>· 本地/Docker：查看 <code>config/config.json</code> 的 <code>resetKey</code> 字段<br>· Cloudflare：查看 Dashboard → Settings → Variables 中的 <code>RESET_KEY</code><br>· 恢复码：登录后在后台查看<br><br>默认值与管理员密码相同。</p>
   </div>
 </div>
 
@@ -260,6 +260,15 @@ body{
     </div>
     <button class="btn btn-secondary" id="changePwdBtn">修改密码</button>
   </div>
+</div>
+
+<!-- 恢复码 -->
+<div class="pwd-card">
+  <h2>恢复码 <span class="badge badge-permanent" id="rcCount" style="font-size:11px;vertical-align:middle;margin-left:6px">5 个可用</span></h2>
+  <p style="font-size:12px;color:var(--text-secondary);margin:8px 0">恢复码可一次性替代管理员密码登录，用完即作废。</p>
+  <div id="rcList" style="font-family:monospace;font-size:13px;line-height:1.8;margin-bottom:10px;display:none"></div>
+  <button class="btn btn-secondary btn-sm" id="showRcBtn">查看恢复码</button>
+  <button class="btn btn-secondary btn-sm" id="regenerateRcBtn" style="margin-left:8px">重新生成</button>
 </div>
 
 <!-- 创建房间 -->
@@ -447,9 +456,52 @@ body{
       const data=await resp.json();
       if(data.error){toast(data.error);return}
       toast('密码已修改');
-      alert('密码已修改。如忘记新密码，可用环境变量 RESET_KEY 的值恢复登录。');
+      alert('密码已修改。如忘记新密码，可用环境变量 RESET_KEY 或恢复码恢复登录。');
       oldPwd.value='';newPwd.value='';
     }catch(e){toast('修改失败')}
+  });
+
+  // 恢复码
+  const showRcBtn=$('#showRcBtn');
+  const regenerateRcBtn=$('#regenerateRcBtn');
+  const rcList=$('#rcList');
+  const rcCount=$('#rcCount');
+
+  async function loadRecoveryCodes(){
+    try{
+      const resp=await api('/api/admin/recovery-codes');
+      const data=await resp.json();
+      rcCount.textContent=`${data.count} 个可用`;
+      if(data.codes.length>0){
+        rcList.innerHTML=data.codes.map(c=>`<div style="padding:2px 0">· ${c}</div>`).join('');
+        rcList.style.display='';
+      }else{
+        rcList.innerHTML='<div style="color:var(--text-muted)">暂无可用恢复码</div>';
+        rcList.style.display='';
+      }
+    }catch(e){}
+  }
+
+  let rcVisible=false;
+  showRcBtn.addEventListener('click',async()=>{
+    if(rcVisible){rcList.style.display='none';showRcBtn.textContent='查看恢复码';rcVisible=false;return}
+    await loadRecoveryCodes();
+    rcList.style.display='';showRcBtn.textContent='隐藏恢复码';rcVisible=true;
+  });
+
+  regenerateRcBtn.addEventListener('click',async()=>{
+    if(!confirm('重新生成将使之前的恢复码全部作废，确定？'))return;
+    try{
+      const resp=await api('/api/admin/recovery-codes',{method:'POST',body:{regenerate:true}});
+      const data=await resp.json();
+      if(data.codes){
+        rcList.innerHTML=data.codes.map(c=>`<div style="padding:2px 0">· ${c}</div>`).join('');
+        rcList.style.display='';
+        rcCount.textContent=`${data.count} 个可用`;
+        rcVisible=true;showRcBtn.textContent='隐藏恢复码';
+        toast('恢复码已重新生成');
+      }
+    }catch(e){toast('操作失败')}
   });
 
   function formatTime(iso){

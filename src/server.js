@@ -83,6 +83,25 @@ function readBody(req) {
   });
 }
 
+// --- 恢复码 ---
+function generateRecoveryCode() {
+  const chars = 'abcdefghjkmnpqrstuvwxyz23456789'; // 不含 0/o/1/l
+  const seg = () => Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+  return `${seg()}-${seg()}-${seg()}`;
+}
+
+function generateRecoveryCodes(count = 5) {
+  return Array.from({ length: count }, () => generateRecoveryCode());
+}
+
+function getRecoveryCodes() {
+  try { return JSON.parse(getSetting('recovery_codes') || '[]'); } catch { return []; }
+}
+
+function setRecoveryCodes(codes) {
+  setSetting('recovery_codes', JSON.stringify(codes));
+}
+
 // --- Session 管理 ---
 const sessions = new Map();
 const SESSION_TTL = 24 * 60 * 60 * 1000;
@@ -233,6 +252,18 @@ const server = http.createServer(async (req, res) => {
     }
     const inputHash = hashPassword(body.password);
     if (inputHash !== storedHash) {
+      // 检查恢复码
+      const codes = getRecoveryCodes();
+      const rcIdx = codes.indexOf(body.password);
+      if (rcIdx !== -1) {
+        codes.splice(rcIdx, 1);
+        setRecoveryCodes(codes);
+        setSetting('admin_password', inputHash);
+        const sessionToken = createSession();
+        rateLimitMap.delete(ip);
+        jsonResponse(res, { token: sessionToken, recovered: true });
+        return;
+      }
       const hint = limit.remaining <= 1 ? '，忘记密码请查看 config.json 中的 resetKey 字段' : '';
       jsonResponse(res, { error: `密码错误，还剩${limit.remaining}次尝试${hint}` }, 401);
       return;
@@ -240,6 +271,24 @@ const server = http.createServer(async (req, res) => {
     rateLimitMap.delete(ip);
     const sessionToken = createSession();
     jsonResponse(res, { token: sessionToken });
+    return;
+  }
+
+  // 恢复码 API
+  if (urlPath === '/api/admin/recovery-codes' && req.method === 'GET') {
+    const codes = getRecoveryCodes();
+    jsonResponse(res, { codes, count: codes.length });
+    return;
+  }
+  if (urlPath === '/api/admin/recovery-codes' && req.method === 'POST') {
+    const body = await readBody(req);
+    if (body && body.regenerate === true) {
+      const newCodes = generateRecoveryCodes(5);
+      setRecoveryCodes(newCodes);
+      jsonResponse(res, { codes: newCodes, count: newCodes.length });
+      return;
+    }
+    jsonResponse(res, { error: '无效请求' }, 400);
     return;
   }
 
@@ -273,11 +322,18 @@ const server = http.createServer(async (req, res) => {
     }
     const storedHash = getSetting('admin_password');
     if (hashPassword(body.oldPassword) !== storedHash) {
-      jsonResponse(res, { error: '原密码错误' }, 401);
-      return;
+      const codes = getRecoveryCodes();
+      if (codes.indexOf(body.oldPassword) === -1) {
+        jsonResponse(res, { error: '原密码错误' }, 401);
+        return;
+      }
     }
     const newHash = hashPassword(body.newPassword);
     setSetting('admin_password', newHash);
+    config.adminPassword = body.newPassword;
+    try {
+      fs.writeFileSync(path.join(__dirname, '../config/config.json'), JSON.stringify(config, null, 2), 'utf-8');
+    } catch (_) {}
     jsonResponse(res, { ok: true });
     return;
   }
@@ -543,6 +599,14 @@ function generateToken(prefix) {
 async function start() {
   await initDB();
   initDefaultAdmin();
+
+  // 首次启动时生成恢复码
+  const existingCodes = getRecoveryCodes();
+  if (existingCodes.length === 0) {
+    const codes = generateRecoveryCodes(5);
+    setRecoveryCodes(codes);
+    console.log(`[clip-relay] 管理员恢复码: ${codes.join('  ')}`);
+  }
 
   // 如果配置文件未设置密码
   if (!config.adminPassword) {
