@@ -2,7 +2,7 @@ import type { DurableObjectNamespace, D1Database } from '@cloudflare/workers-typ
 import { Room } from './room';
 import { INDEX_HTML, ADMIN_HTML } from './static_pages';
 
-const { createSession, validateSession } = require('../shared/session');
+const { createSession, validateSession, cleanupExpiredSessions } = require('../shared/session');
 const { checkRateLimit, clearRateLimit } = require('../shared/rate-limit');
 const { generateToken } = require('../shared/token');
 
@@ -205,6 +205,7 @@ async function handleToggleRoom(request: Request): Promise<Response> {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     (globalThis as any).env = env;
+    cleanupExpiredSessions();
 
     // Auto-initialize D1 tables
     try {

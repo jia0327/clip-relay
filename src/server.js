@@ -8,7 +8,7 @@ const {
   createRoom, getRoomConfig, listRooms, deleteRoom, deleteExpiredRooms, countRoomMessages, toggleRoom,
   getSetting, setSetting, initDefaultAdmin
 } = require('./db');
-const { createSession, validateSession: _validateSession } = require('./shared/session');
+const { createSession, validateSession: _validateSession, cleanupExpiredSessions } = require('./shared/session');
 const { checkRateLimit, clearRateLimit } = require('./shared/rate-limit');
 const { generateToken } = require('./shared/token');
 const { RoomManager } = require('./room');
@@ -456,6 +456,7 @@ wss.on('connection', (ws, req) => {
 // --- 定期清理 ---
 const CLEANUP_INTERVAL = 10 * 1000;
 setInterval(() => {
+  cleanupExpiredSessions();
   const expired = roomManager.cleanupExpired();
   for (const token of expired) {
     deleteRoom(token);

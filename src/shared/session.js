@@ -19,12 +19,11 @@ function validateSession(auth) {
   return true;
 }
 
-// 定期清理过期 session
-setInterval(() => {
+function cleanupExpiredSessions() {
   const now = Date.now();
   for (const [token, s] of sessions) {
     if (now - s.createdAt > SESSION_TTL) sessions.delete(token);
   }
-}, 3600 * 1000);
+}
 
-module.exports = { createSession, validateSession };
+module.exports = { createSession, validateSession, cleanupExpiredSessions };
