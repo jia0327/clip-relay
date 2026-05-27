@@ -34,14 +34,7 @@ export class Room implements DurableObject {
     const { 0: clientWs, 1: serverWs } = new WebSocketPair();
     console.log('Created WebSocketPair');
 
-    serverWs.addEventListener('message', (event) => {
-      console.log('Received message:', event.data.toString().substring(0, 100));
-      this.handleMessage(token, serverWs, event.data.toString()).catch(err => {
-        console.error('handleMessage error:', err?.message || err);
-      });
-    });
-
-    this.ctx.acceptWebSocket(serverWs);
+    this.ctx.acceptWebSocket(serverWs, [token]);
     console.log('Accepted WebSocket, total:', this.ctx.getWebSockets().length);
 
     try {
@@ -52,6 +45,20 @@ export class Room implements DurableObject {
     console.log('WebSocket upgrade complete, returning 101');
 
     return new Response(null, { status: 101, webSocket: clientWs });
+  }
+
+  async webSocketMessage(ws: WebSocket, message: string) {
+    const [token] = this.ctx.getTags(ws);
+    console.log('webSocketMessage, token:', token, 'msg:', message.substring(0, 100));
+    await this.handleMessage(token, ws, message);
+  }
+
+  async webSocketClose(ws: WebSocket, code: number, reason: string, wasClean: boolean) {
+    console.log('webSocketClose, code:', code, 'reason:', reason);
+  }
+
+  async webSocketError(ws: WebSocket, error: Error) {
+    console.error('webSocketError:', error.message);
   }
 
   private async handleMessage(token: string, ws: WebSocket, raw: string) {
