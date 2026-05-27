@@ -17,24 +17,30 @@ export class Room implements DurableObject {
   ) {}
 
   async fetch(request: Request): Promise<Response> {
+    console.log('Room.fetch called, path:', new URL(request.url).pathname, 'upgrade:', request.headers.get('Upgrade'));
+
     if (request.headers.get('Upgrade') !== 'websocket') {
       return new Response('Expected WebSocket upgrade', { status: 426 });
     }
 
     const url = new URL(request.url);
     const token = url.searchParams.get('token');
+    console.log('WebSocket request, token:', token);
 
     if (!token) {
       return new Response('Missing token', { status: 400 });
     }
 
     const { 0: clientWs, 1: serverWs } = new WebSocketPair();
+    console.log('Created WebSocketPair');
 
     serverWs.addEventListener('message', (event) => {
+      console.log('Received message:', event.data.toString().substring(0, 100));
       this.handleMessage(token, serverWs, event.data.toString());
     });
 
     this.ctx.acceptWebSocket(serverWs);
+    console.log('Accepted WebSocket, total:', this.ctx.getWebSockets().length);
 
     await this.scheduleAlarm(token);
 
