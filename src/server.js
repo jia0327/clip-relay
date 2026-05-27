@@ -5,7 +5,7 @@ const crypto = require('crypto');
 const WebSocket = require('ws');
 const {
   initDB, addMessage, addImageMessage, getRoomMessages, deleteRoomMessages, cleanupOldMessages,
-  createRoom, getRoomConfig, listRooms, deleteRoom, countRoomMessages, toggleRoom,
+  createRoom, getRoomConfig, listRooms, deleteRoom, deleteExpiredRooms, countRoomMessages, toggleRoom,
   getSetting, setSetting, initDefaultAdmin
 } = require('./db');
 const { createSession, validateSession: _validateSession } = require('./shared/session');
@@ -226,6 +226,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (urlPath === '/api/admin/rooms' && req.method === 'GET') {
+    deleteExpiredRooms();
     const rooms = listRooms();
     const enriched = rooms.map(r => ({
       ...r,
@@ -453,12 +454,13 @@ wss.on('connection', (ws, req) => {
 });
 
 // --- 定期清理 ---
-const CLEANUP_INTERVAL = 60 * 1000;
+const CLEANUP_INTERVAL = 10 * 1000;
 setInterval(() => {
   const expired = roomManager.cleanupExpired();
   for (const token of expired) {
     deleteRoom(token);
   }
+  deleteExpiredRooms();
   cleanupOldMessages();
 }, CLEANUP_INTERVAL);
 

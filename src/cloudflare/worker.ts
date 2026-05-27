@@ -109,6 +109,10 @@ async function handleChangePassword(request: Request, env: Env): Promise<Respons
 
 async function handleGetRooms(): Promise<Response> {
   const db = (globalThis as any).env.DB;
+  // 清理过期房间
+  await db.exec("DELETE FROM rooms WHERE expires_at IS NOT NULL AND expires_at < datetime('now')");
+  await db.exec("DELETE FROM messages WHERE room_token NOT IN (SELECT token FROM rooms)");
+
   const { results: rooms } = await db.prepare("SELECT * FROM rooms WHERE disabled != 2 ORDER BY created_at DESC").all();
 
   const enriched = [];

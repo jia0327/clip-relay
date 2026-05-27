@@ -277,12 +277,19 @@ body{
     <div class="form-group">
       <label>有效期</label>
       <select id="roomTTL">
+        <option value="2">2 分钟（测试）</option>
+        <option value="5">5 分钟</option>
         <option value="30">30 分钟（临时）</option>
         <option value="60">1 小时</option>
         <option value="120">2 小时</option>
         <option value="1440">24 小时</option>
         <option value="0">永久有效</option>
+        <option value="-1">自定义</option>
       </select>
+      <div id="customTTLField" style="display:none;margin-top:8px">
+        <input type="number" id="customTTL" min="1" value="10" style="width:100px">
+        <span style="font-size:12px;color:var(--text-muted)"> 分钟</span>
+      </div>
     </div>
     <button class="btn btn-primary" id="createBtn">创建房间</button>
   </div>
@@ -540,7 +547,8 @@ body{
   async function createNewRoom(){
     const name=roomName.value.trim();
     if(!name){toast('请输入房间名称');return}
-    const ttl=parseInt(roomTTL.value);
+    let ttl=parseInt(roomTTL.value);
+    if(ttl===-1) ttl=parseInt(customTTL.value)||10;
     const token=roomToken.value.trim()||'';
     try{
       const resp=await api('/api/admin/rooms',{
@@ -558,6 +566,9 @@ body{
 
   createBtn.addEventListener('click',createNewRoom);
   roomName.addEventListener('keydown',e=>{if(e.key==='Enter')createNewRoom()});
+  roomTTL.addEventListener('change',()=>{
+    customTTLField.style.display=parseInt(roomTTL.value)===-1?'block':'none';
+  });
 
   function escapeHtml(s){
     const d=document.createElement('div');d.textContent=s;return d.innerHTML;

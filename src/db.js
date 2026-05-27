@@ -35,7 +35,9 @@ async function initDB() {
       token TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       ttl_minutes INTEGER NOT NULL DEFAULT 30,
-      created_at TEXT NOT NULL
+      created_at TEXT NOT NULL,
+      expires_at TEXT,
+      disabled INTEGER NOT NULL DEFAULT 0
     )
   `);
 
@@ -49,6 +51,7 @@ function migrateColumns() {
   try { db.run('ALTER TABLE messages ADD COLUMN filename TEXT'); } catch (_) {}
   try { db.run('CREATE TABLE IF NOT EXISTS rooms (token TEXT PRIMARY KEY, name TEXT NOT NULL, ttl_minutes INTEGER NOT NULL DEFAULT 30, created_at TEXT NOT NULL)'); } catch (_) {}
   try { db.run('ALTER TABLE rooms ADD COLUMN disabled INTEGER NOT NULL DEFAULT 0'); } catch (_) {}
+  try { db.run('ALTER TABLE rooms ADD COLUMN expires_at TEXT'); } catch (_) {}
   persistDB();
 }
 
@@ -108,14 +111,15 @@ function cleanupOldMessages() {
 // --- 房间管理 ---
 function createRoom(token, name, ttlMinutes) {
   const now = new Date().toISOString();
-  db.run('INSERT OR REPLACE INTO rooms (token, name, ttl_minutes, created_at) VALUES (?, ?, ?, ?)',
-    [token, name, ttlMinutes, now]);
+  const expiresAt = ttlMinutes > 0 ? new Date(Date.now() + ttlMinutes * 60000).toISOString() : null;
+  db.run('INSERT OR REPLACE INTO rooms (token, name, ttl_minutes, created_at, expires_at) VALUES (?, ?, ?, ?, ?)',
+    [token, name, ttlMinutes, now, expiresAt]);
   persistDB();
-  return { token, name, ttl_minutes: ttlMinutes, created_at: now };
+  return { token, name, ttl_minutes: ttlMinutes, created_at: now, expires_at: expiresAt };
 }
 
 function getRoomConfig(token) {
-  const stmt = db.prepare('SELECT token, name, ttl_minutes, created_at, disabled FROM rooms WHERE token = ?');
+  const stmt = db.prepare('SELECT token, name, ttl_minutes, created_at, expires_at, disabled FROM rooms WHERE token = ?');
   stmt.bind([token]);
   let room = null;
   if (stmt.step()) room = stmt.getAsObject();
@@ -136,11 +140,22 @@ function toggleRoom(token) {
 }
 
 function listRooms() {
-  const stmt = db.prepare('SELECT token, name, ttl_minutes, created_at, disabled FROM rooms ORDER BY created_at DESC');
+  const stmt = db.prepare('SELECT token, name, ttl_minutes, created_at, expires_at, disabled FROM rooms ORDER BY created_at DESC');
   const rooms = [];
   while (stmt.step()) rooms.push(stmt.getAsObject());
   stmt.free();
   return rooms;
+}
+
+function deleteExpiredRooms() {
+  const now = new Date().toISOString();
+  const stmt = db.prepare("SELECT token FROM rooms WHERE expires_at IS NOT NULL AND expires_at < ?");
+  stmt.bind([now]);
+  const expired = [];
+  while (stmt.step()) expired.push(stmt.getAsObject().token);
+  stmt.free();
+  for (const token of expired) deleteRoom(token);
+  return expired.length;
 }
 
 function deleteRoom(token) {
@@ -189,7 +204,7 @@ function initDefaultAdmin() {
 module.exports = {
   initDB,
   addMessage, addImageMessage, getRoomMessages, deleteRoomMessages, cleanupOldMessages,
-  createRoom, getRoomConfig, listRooms, deleteRoom, countRoomMessages,
+  createRoom, getRoomConfig, listRooms, deleteRoom, deleteExpiredRooms, countRoomMessages,
   toggleRoom,
   getSetting, setSetting, initDefaultAdmin
 };
