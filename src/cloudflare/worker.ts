@@ -7,6 +7,7 @@ export interface Env {
   ROOM: DurableObjectNamespace;
   MAX_IMAGE_SIZE: string;
   DEFAULT_TOKEN: string;
+  adminPassword?: string;
 }
 
 // --- Session 管理 ---
@@ -94,20 +95,32 @@ async function handleLogin(request: Request, env: Env): Promise<Response> {
     return new Response(JSON.stringify({ error: '请输入密码' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
   }
 
-  const storedHash = getSetting('admin_password');
   const inputHash = await hashPassword(body.password);
+  const storedHash = getSetting('admin_password');
 
-  if (inputHash !== storedHash) {
-    const hint = (limit as any).remaining <= 1 ? '，忘记密码请重置' : '';
-    return new Response(JSON.stringify({ error: `密码错误，还剩${(limit as any).remaining}次尝试${hint}` }), {
-      status: 401,
+  // 密码匹配
+  if (inputHash === storedHash) {
+    rateLimitMap.delete(ip);
+    const sessionToken = createSession();
+    return new Response(JSON.stringify({ token: sessionToken }), {
       headers: { 'Content-Type': 'application/json' }
     });
   }
 
-  rateLimitMap.delete(ip);
-  const sessionToken = createSession();
-  return new Response(JSON.stringify({ token: sessionToken }), {
+  // 恢复密码（环境变量/机密中的 adminPassword）
+  if (env.adminPassword && body.password === env.adminPassword) {
+    // 用恢复密码更新 D1 hash
+    setSetting('admin_password', inputHash);
+    rateLimitMap.delete(ip);
+    const sessionToken = createSession();
+    return new Response(JSON.stringify({ token: sessionToken, recovered: true }), {
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
+  const hint = (limit as any).remaining <= 1 ? '，忘记密码请重置' : '';
+  return new Response(JSON.stringify({ error: `密码错误，还剩${(limit as any).remaining}次尝试${hint}` }), {
+    status: 401,
     headers: { 'Content-Type': 'application/json' }
   });
 }
@@ -126,7 +139,8 @@ async function handleChangePassword(request: Request, env: Env): Promise<Respons
   const storedHash = getSetting('admin_password');
   const oldInputHash = await hashPassword(body.oldPassword);
 
-  if (oldInputHash !== storedHash) {
+  // 允许用恢复密码作为原密码
+  if (oldInputHash !== storedHash && !(env.adminPassword && body.oldPassword === env.adminPassword)) {
     return new Response(JSON.stringify({ error: '原密码错误' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
   }
 
