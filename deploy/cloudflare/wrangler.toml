@@ -1,5 +1,5 @@
 name = "clip-relay"
-main = "../src/cloudflare/worker.ts"
+main = "../../src/cloudflare/worker.ts"
 compatibility_date = "2025-01-01"
 
 [[durable_objects.bindings]]
