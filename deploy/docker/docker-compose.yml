@@ -1,15 +1,13 @@
 # ClipRelay Docker Compose
 #
-# 两种方式使用：
-#   1. 本地开发：cd deploy && docker compose up -d
-#   2. N1/OpenWRT 构建：cd deploy && docker compose build
-#      如果 npm registry 被 DNS 拦截（EAI_AGAIN），需要先添加 registry 镜像
+# 使用：
+#   cd deploy/docker && docker compose up -d
 
 services:
   clip-relay:
     build:
-      context: ..
-      dockerfile: deploy/Dockerfile
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
       # N1 等 OpenWRT 设备：DNS 代理可能拦截容器 DNS，需要 host 网络模式构建
       # 如果遇到 npm ERR! EAI_AGAIN，取消下面这行的注释：
       # network: host
