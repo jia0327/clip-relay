@@ -29,10 +29,11 @@ jobs:
           cd deploy/cloudflare
           npm install --legacy-peer-deps
 
-      - name: Update wrangler.toml with D1 ID
+      - name: Update wrangler.toml placeholders
         run: |
           cd deploy/cloudflare
           sed -i "s/D1_DB_ID/${{ secrets.D1_DATABASE_ID }}/g" wrangler.toml
+          sed -i "s/CF_ACCOUNT_ID/${{ secrets.CF_ACCOUNT_ID }}/g" wrangler.toml
 
       - name: Deploy to Cloudflare
         run: |

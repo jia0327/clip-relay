@@ -1,6 +1,7 @@
 name = "clip-relay"
 main = "../../src/cloudflare/worker.ts"
 compatibility_date = "2025-01-01"
+account_id = "CF_ACCOUNT_ID"
 
 [[durable_objects.bindings]]
 name = "ROOM"
