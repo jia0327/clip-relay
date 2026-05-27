@@ -17,9 +17,7 @@ export class Room implements DurableObject {
   constructor(
     private ctx: DurableObjectState,
     private env: Env
-  ) {
-    this.ctx.setWebSocketAutoResponse(true);
-  }
+  ) {}
 
   async fetch(request: Request): Promise<Response> {
     if (request.headers.get('Upgrade') !== 'websocket') {
