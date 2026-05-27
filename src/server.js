@@ -83,25 +83,6 @@ function readBody(req) {
   });
 }
 
-// --- 恢复码 ---
-function generateRecoveryCode() {
-  const chars = 'abcdefghjkmnpqrstuvwxyz23456789'; // 不含 0/o/1/l
-  const seg = () => Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-  return `${seg()}-${seg()}-${seg()}`;
-}
-
-function generateRecoveryCodes(count = 5) {
-  return Array.from({ length: count }, () => generateRecoveryCode());
-}
-
-function getRecoveryCodes() {
-  try { return JSON.parse(getSetting('recovery_codes') || '[]'); } catch { return []; }
-}
-
-function setRecoveryCodes(codes) {
-  setSetting('recovery_codes', JSON.stringify(codes));
-}
-
 // --- Session 管理 ---
 const sessions = new Map();
 const SESSION_TTL = 24 * 60 * 60 * 1000;
@@ -161,7 +142,7 @@ function checkRateLimit(ip) {
   if (entry.count > RATE_LIMIT_MAX) {
     entry.blockedUntil = now + RATE_LIMIT_BLOCK;
     const remainSec = Math.ceil(RATE_LIMIT_BLOCK / 1000);
-    return { blocked: true, remainingSeconds: remainSec, message: `尝试次数过多，请${remainSec}秒后再试。如忘记密码，请使用恢复码。` };
+    return { blocked: true, remainingSeconds: remainSec, message: `尝试次数过多，请${remainSec}秒后再试。如忘记密码，请使用 RESET_KEY。` };
   }
   return { blocked: false, remaining: RATE_LIMIT_MAX - entry.count };
 }
@@ -243,20 +224,7 @@ const server = http.createServer(async (req, res) => {
     if (inputHash !== storedHash) {
       // 检查 RESET_KEY → 重置为 admin
       if (config.resetKey && body.password === config.resetKey) {
-        const adminHash = hashPassword('admin');
-        setSetting('admin_password', adminHash);
-        const sessionToken = createSession();
-        rateLimitMap.delete(ip);
-        jsonResponse(res, { token: sessionToken, recovered: true, message: '密码已重置为 admin，请及时修改密码' });
-        return;
-      }
-      // 检查恢复码
-      const codes = getRecoveryCodes();
-      const rcIdx = codes.indexOf(body.password);
-      if (rcIdx !== -1) {
-        codes.splice(rcIdx, 1);
-        setRecoveryCodes(codes);
-        setSetting('admin_password', inputHash);
+        setSetting('admin_password', hashPassword('admin'));
         const sessionToken = createSession();
         rateLimitMap.delete(ip);
         jsonResponse(res, { token: sessionToken, recovered: true, message: '密码已重置为 admin，请及时修改密码' });
@@ -268,34 +236,6 @@ const server = http.createServer(async (req, res) => {
     rateLimitMap.delete(ip);
     const sessionToken = createSession();
     jsonResponse(res, { token: sessionToken });
-    return;
-  }
-
-  // 恢复码 API
-  if (urlPath === '/api/admin/recovery-codes' && req.method === 'GET') {
-    const codes = getRecoveryCodes();
-    jsonResponse(res, { codes, count: codes.length });
-    return;
-  }
-  if (urlPath === '/api/admin/recovery-codes' && req.method === 'POST') {
-    const body = await readBody(req);
-    if (body && body.regenerate === true) {
-      const newCodes = generateRecoveryCodes(5);
-      setRecoveryCodes(newCodes);
-      config.recoveryCodes = newCodes;
-      try {
-        fs.writeFileSync(path.join(__dirname, '../config/config.json'), JSON.stringify(config, null, 2), 'utf-8');
-      } catch (_) {}
-      try {
-        const wPath = path.join(__dirname, '../deploy/cloudflare/wrangler.toml');
-        let w = fs.readFileSync(wPath, 'utf-8');
-        w = w.replace(/^RECOVERY_CODES\s*=\s*".*?"/m, `RECOVERY_CODES = "${newCodes.join(',')}"`);
-        fs.writeFileSync(wPath, w, 'utf-8');
-      } catch (_) {}
-      jsonResponse(res, { codes: newCodes, count: newCodes.length });
-      return;
-    }
-    jsonResponse(res, { error: '无效请求' }, 400);
     return;
   }
 
@@ -328,13 +268,9 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     const storedHash = getSetting('admin_password');
-    if (hashPassword(body.oldPassword) !== storedHash) {
-      // 允许用恢复码或 resetKey 作为原密码
-      const codes = getRecoveryCodes();
-      if (codes.indexOf(body.oldPassword) === -1 && body.oldPassword !== config.resetKey) {
-        jsonResponse(res, { error: '原密码错误' }, 401);
-        return;
-      }
+    if (hashPassword(body.oldPassword) !== storedHash && body.oldPassword !== config.resetKey) {
+      jsonResponse(res, { error: '原密码错误' }, 401);
+      return;
     }
     const newHash = hashPassword(body.newPassword);
     setSetting('admin_password', newHash);
@@ -608,16 +544,6 @@ async function start() {
   await initDB();
   initDefaultAdmin();
 
-  // 初始化恢复码（优先使用 config 中写入的）
-  const existingCodes = getRecoveryCodes();
-  if (existingCodes.length === 0) {
-    const codes = config.recoveryCodes && config.recoveryCodes.length > 0 ? config.recoveryCodes : generateRecoveryCodes(5);
-    setRecoveryCodes(codes);
-    config.recoveryCodes = codes;
-    try { fs.writeFileSync(path.join(__dirname, '../config/config.json'), JSON.stringify(config, null, 2), 'utf-8'); } catch (_) {}
-    console.log(`[clip-relay] 管理员恢复码: ${codes.join('  ')}`);
-  }
-
   // 确保 config 中有 resetKey，同步到 wrangler.toml
   if (!config.resetKey) {
     config.resetKey = crypto.randomBytes(16).toString('hex');
@@ -627,22 +553,15 @@ async function start() {
     const wPath = path.join(__dirname, '../deploy/cloudflare/wrangler.toml');
     let w = fs.readFileSync(wPath, 'utf-8');
     w = w.replace(/^RESET_KEY\s*=\s*".*?"/m, `RESET_KEY = "${config.resetKey}"`);
-    if (config.recoveryCodes && config.recoveryCodes.length > 0) {
-      w = w.replace(/^RECOVERY_CODES\s*=\s*".*?"/m, `RECOVERY_CODES = "${config.recoveryCodes.join(',')}"`);
-    }
     fs.writeFileSync(wPath, w, 'utf-8');
   } catch (_) {}
 
   // 如果配置文件未设置密码
   if (!config.adminPassword) {
-    const dbHash = getSetting('admin_password');
-    // 首次部署，初始化密码为 admin
     setSetting('admin_password', hashPassword('admin'));
     config.adminPassword = 'admin';
     try { fs.writeFileSync(path.join(__dirname, '../config/config.json'), JSON.stringify(config, null, 2), 'utf-8'); } catch (_) {}
     console.log(`[clip-relay] 管理员密码: admin`);
-    const allCodes = getRecoveryCodes();
-    if (allCodes.length > 0) console.log(`[clip-relay] 管理员恢复码: ${allCodes.join('  ')}`);
     console.log(`[clip-relay] 重置密钥 (RESET_KEY): ${config.resetKey}`);
   } else {
     console.log('[clip-relay] 使用已有管理员密码（来自数据库）');
