@@ -19,4 +19,4 @@ binding = "DB"
 database_name = "clip-relay"
 database_id = "D1_DB_ID"
 
-assets = { binding = "ASSETS", directory = "../../public" }
+assets = { directory = "../../public" }

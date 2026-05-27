@@ -1,16 +1,11 @@
 import type { DurableObjectNamespace, D1Database } from '@cloudflare/workers-types';
 import { Room } from './room';
 
-interface Fetcher {
-  fetch(request: Request): Promise<Response>;
-}
-
 export interface Env {
   DB: D1Database;
   ROOM: DurableObjectNamespace;
   MAX_IMAGE_SIZE: string;
   DEFAULT_TOKEN: string;
-  ASSETS: Fetcher;
 }
 
 // --- Session 管理 ---
@@ -332,11 +327,13 @@ export default {
       return handleToggleRoom(request);
     }
 
-    // Serve static assets
+    // Redirect /admin to admin.html (served by Workers + Assets)
     if (path === '/admin') {
       return Response.redirect(`${url.origin}/admin.html`, 301);
     }
-    return env.ASSETS.fetch(request);
+
+    // Static files (/) served by Workers + Assets auto-serve
+    return new Response('Not Found', { status: 404 });
   }
 };
 
