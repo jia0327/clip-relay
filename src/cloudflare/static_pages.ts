@@ -569,7 +569,7 @@ body {
       <textarea class="msg-textarea" id="msgInput" placeholder="输入消息" rows="1" autocomplete="off"></textarea>
       <button class="btn-icon" id="imgBtn" title="发送图片">🖼</button>
       <input type="file" id="imgInput" accept="image/*" style="display:none">
-      <a href="https://upfile.live/zh-cn/" target="_blank" rel="noopener" class="btn-icon" id="fileBtn" title="上传大文件（第三方）">📎</a>
+      <a href="https://upfile.live/zh-cn/" target="_blank" rel="noopener" class="btn-icon" id="fileBtn" title="文件传送（第三方）">📎</a>
       <button class="btn btn-primary" id="sendBtn">发送</button>
     </div>
   </div>
