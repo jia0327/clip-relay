@@ -220,7 +220,7 @@ export class Room implements DurableObject {
   }
 
   private async getRoomConfig(token: string) {
-    return await this.env.DB.prepare('SELECT * FROM rooms WHERE token = ?').first(token) as any;
+    return await this.env.DB.prepare('SELECT * FROM rooms WHERE token = ?').bind(token).first() as any;
   }
 
   private async createRoom(token: string, name: string, ttlMinutes: number) {

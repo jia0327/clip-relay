@@ -72,7 +72,7 @@ function getClientIP(request: Request): string {
 // --- Storage helpers ---
 async function getSetting(key: string): Promise<string | null> {
   const stmt = (globalThis as any).env.DB.prepare('SELECT value FROM settings WHERE key = ?');
-  const row = await stmt.first(key) as any;
+  const row = await stmt.bind(key).first() as any;
   return row?.value || null;
 }
 
@@ -155,7 +155,7 @@ async function handleGetRooms(): Promise<Response> {
 
   const enriched = [];
   for (const r of (rooms || [])) {
-    const msgCount = await db.prepare('SELECT COUNT(*) as count FROM messages WHERE room_token = ?').first(r.token) as any;
+    const msgCount = await db.prepare('SELECT COUNT(*) as count FROM messages WHERE room_token = ?').bind(r.token).first() as any;
     enriched.push({
       ...r,
       message_count: msgCount?.count || 0,
@@ -226,7 +226,7 @@ async function handleToggleRoom(request: Request): Promise<Response> {
     return new Response(JSON.stringify({ error: '缺少 token' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
   }
 
-  const room = await (globalThis as any).env.DB.prepare('SELECT * FROM rooms WHERE token = ?').first(body.token) as any;
+  const room = await (globalThis as any).env.DB.prepare('SELECT * FROM rooms WHERE token = ?').bind(body.token).first() as any;
   if (!room) {
     return new Response(JSON.stringify({ error: '房间不存在' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
   }
