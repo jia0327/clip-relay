@@ -7,8 +7,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jia666666/clip-relay/stargazers"><img src="https://img.shields.io/github/stars/jia666666/clip-relay" alt="Stars" /></a>
-  <a href="https://github.com/jia666666/clip-relay/releases/latest"><img src="https://img.shields.io/github/v/release/jia666666/clip-relay?display_name=tag" alt="Latest Release" /></a>
+  <a href="https://github.com/jia0327/clip-relay/stargazers"><img src="https://img.shields.io/github/stars/jia0327/clip-relay" alt="Stars" /></a>
+  <a href="https://github.com/jia0327/clip-relay/releases/latest"><img src="https://img.shields.io/github/v/release/jia0327/clip-relay?display_name=tag" alt="Latest Release" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue" alt="License: MIT" /></a>
 </p>
 
