@@ -109,9 +109,10 @@ async function handleChangePassword(request: Request, env: Env): Promise<Respons
 
 async function handleGetRooms(): Promise<Response> {
   const db = (globalThis as any).env.DB;
-  // 清理过期房间
-  await db.exec("DELETE FROM rooms WHERE expires_at IS NOT NULL AND expires_at < datetime('now')");
-  await db.exec("DELETE FROM messages WHERE room_token NOT IN (SELECT token FROM rooms)");
+  // 清理过期房间（用参数化的 ISO 格式确保比较正确）
+  const now = new Date().toISOString();
+  await db.prepare("DELETE FROM rooms WHERE expires_at IS NOT NULL AND expires_at < ?1").bind(now).run();
+  await db.prepare("DELETE FROM messages WHERE room_token NOT IN (SELECT token FROM rooms)").run();
 
   const { results: rooms } = await db.prepare("SELECT * FROM rooms WHERE disabled != 2 ORDER BY created_at DESC").all();
 
