@@ -312,7 +312,7 @@ body {
   display: none;
   flex-direction: column;
   align-items: flex-start;
-  gap: 2px;
+  gap: 6px;
   width: 100%;
 }
 .history-section.show { display: flex; }
@@ -569,6 +569,7 @@ body {
       <textarea class="msg-textarea" id="msgInput" placeholder="输入消息" rows="1" autocomplete="off"></textarea>
       <button class="btn-icon" id="imgBtn" title="发送图片">🖼</button>
       <input type="file" id="imgInput" accept="image/*" style="display:none">
+      <a href="https://upfile.live/zh-cn/" target="_blank" rel="noopener" class="btn-icon" id="fileBtn" title="上传大文件（第三方）">📎</a>
       <button class="btn btn-primary" id="sendBtn">发送</button>
     </div>
   </div>
@@ -866,12 +867,8 @@ function appendMessageCard(msg, isNew, container) {
       showToast('已复制');
     });
 
-    // 插入到历史折叠按钮之前
-    if (target === msgList && historyFold.children.length > 0) {
-      msgList.insertBefore(card, historyFold);
-    } else {
-      target.appendChild(card);
-    }
+    // 插入消息
+    target.appendChild(card);
 
     if (isNew) {
       scrollToBottom();
@@ -986,11 +983,7 @@ function appendMessageCard(msg, isNew, container) {
       copyToClipboard(sel || content);
       showToast('已复制');
     });
-    if (historyFold.children.length > 0) {
-      msgList.insertBefore(card, historyFold);
-    } else {
-      msgList.appendChild(card);
-    }
+    msgList.appendChild(card);
     scrollToBottom();
   }
 
