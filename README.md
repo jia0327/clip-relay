@@ -56,7 +56,7 @@
 
 ```
 手机端：打开链接 → 粘贴内容/图片 → 发送
-电脑端：打开链接 → 内容已自动复制到剪贴板 → 直接用
+电脑端：打开链接 → 点击消息复制内容 → 直接用
 ```
 
 **核心设计：**
@@ -102,6 +102,7 @@ npm start
 适合 24 小时在线的设备（NAS、VPS、N1 等）。
 
 ```bash
+cd deploy/docker
 docker compose up -d
 ```
 
@@ -179,7 +180,8 @@ npm start
   "port": 3000,
   "maxImageSize": 5242880,
   "domain": "",
-  "adminPassword": ""
+  "adminPassword": "",
+  "resetKey": ""
 }
 ```
 
@@ -190,8 +192,9 @@ npm start
 | `maxImageSize` | 单张图片最大字节数（默认 5MB） |
 | `domain` | 公网域名（Cloudflare 部署时使用） |
 | `adminPassword` | 管理员密码（留空则首次启动随机生成） |
+| `resetKey` | 密码重置密钥（32 位随机字符串，输入即重置密码为 `admin`） |
 
-> **忘记密码**：查看 `config.json` 中的 `adminPassword` 字段。
+> **忘记密码**：在登录页输入 `resetKey` 即可重置密码为 `admin`。`resetKey` 在 `config.json` 中查看，或首次启动时终端打印。
 
 ---
 
