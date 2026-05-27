@@ -34,15 +34,15 @@ export class Room implements DurableObject {
     const { 0: clientWs, 1: serverWs } = new WebSocketPair();
     console.log('Created WebSocketPair');
 
-    this.ctx.acceptWebSocket(serverWs);
-    console.log('Accepted WebSocket, total:', this.ctx.getWebSockets().length);
-
     serverWs.addEventListener('message', (event) => {
       console.log('Received message:', event.data.toString().substring(0, 100));
       this.handleMessage(token, serverWs, event.data.toString()).catch(err => {
         console.error('handleMessage error:', err?.message || err);
       });
     });
+
+    this.ctx.acceptWebSocket(serverWs);
+    console.log('Accepted WebSocket, total:', this.ctx.getWebSockets().length);
 
     try {
       await this.scheduleAlarm(token);
