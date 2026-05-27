@@ -220,7 +220,7 @@ export class Room implements DurableObject {
   }
 
   private getRoomConfig(token: string) {
-    return this.env.DB.prepare('SELECT * FROM rooms WHERE token = ?').get(token) as any;
+    return this.env.DB.prepare('SELECT * FROM rooms WHERE token = ?').first(token) as any;
   }
 
   private createRoom(token: string, name: string, ttlMinutes: number) {

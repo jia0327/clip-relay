@@ -70,7 +70,7 @@ function getClientIP(request: Request): string {
 // --- Storage helpers ---
 function getSetting(key: string): string | null {
   const stmt = (globalThis as any).env.DB.prepare('SELECT value FROM settings WHERE key = ?');
-  const row = stmt.get(key) as any;
+  const row = stmt.first(key) as any;
   return row?.value || null;
 }
 
@@ -139,7 +139,7 @@ function handleGetRooms(): Response {
   const rooms = (globalThis as any).env.DB.prepare('SELECT * FROM rooms ORDER BY created_at DESC').all().results || [];
 
   const enriched = rooms.map((r: any) => {
-    const msgCount = (globalThis as any).env.DB.prepare('SELECT COUNT(*) as count FROM messages WHERE room_token = ?').get(r.token) as any;
+    const msgCount = (globalThis as any).env.DB.prepare('SELECT COUNT(*) as count FROM messages WHERE room_token = ?').first(r.token) as any;
     return {
       ...r,
       message_count: msgCount?.count || 0,
@@ -210,7 +210,7 @@ async function handleToggleRoom(request: Request): Promise<Response> {
     return new Response(JSON.stringify({ error: '缺少 token' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
   }
 
-  const room = (globalThis as any).env.DB.prepare('SELECT * FROM rooms WHERE token = ?').get(body.token) as any;
+  const room = (globalThis as any).env.DB.prepare('SELECT * FROM rooms WHERE token = ?').first(body.token) as any;
   if (!room) {
     return new Response(JSON.stringify({ error: '房间不存在' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
   }
