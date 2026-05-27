@@ -7,7 +7,6 @@ export interface Env {
   ROOM: DurableObjectNamespace;
   MAX_IMAGE_SIZE: string;
   DEFAULT_TOKEN: string;
-  RESET_KEY?: string;
   ADMIN_PASSWORD?: string;
   RECOVERY_CODES?: string;
 }
@@ -129,16 +128,6 @@ async function handleLogin(request: Request, env: Env): Promise<Response> {
     });
   }
 
-  // 恢复密码：匹配环境变量 RESET_KEY 时重置密码
-  if (env.RESET_KEY && body.password === env.RESET_KEY) {
-    await setSetting('admin_password', inputHash);
-    rateLimitMap.delete(ip);
-    const sessionToken = createSession();
-    return new Response(JSON.stringify({ token: sessionToken, recovered: true }), {
-      headers: { 'Content-Type': 'application/json' }
-    });
-  }
-
   // 恢复密码：匹配恢复码（一次性）
   const codes = await getRecoveryCodes();
   const idx = codes.indexOf(body.password);
@@ -174,9 +163,8 @@ async function handleChangePassword(request: Request, env: Env): Promise<Respons
   const storedHash = await getSetting('admin_password');
   const oldInputHash = await hashPassword(body.oldPassword);
 
-  // 允许用恢复密码作为原密码
-  if (oldInputHash !== storedHash && !(env.RESET_KEY && body.oldPassword === env.RESET_KEY)) {
-    // 也允许用恢复码作为原密码
+  // 允许用恢复码作为原密码
+  if (oldInputHash !== storedHash) {
     const codes = await getRecoveryCodes();
     if (codes.indexOf(body.oldPassword) === -1) {
       return new Response(JSON.stringify({ error: '原密码错误' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
@@ -310,7 +298,7 @@ export default {
 
     // 首次部署时写入默认密码，不覆盖用户已修改的密码
     {
-      const adminPwd = env.ADMIN_PASSWORD || env.RESET_KEY || 'admin';
+      const adminPwd = env.ADMIN_PASSWORD || 'admin';
       const adminHash = await hashPassword(adminPwd);
       const storedHash = await getSetting('admin_password');
       if (!storedHash) {

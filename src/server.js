@@ -161,7 +161,7 @@ function checkRateLimit(ip) {
   if (entry.count > RATE_LIMIT_MAX) {
     entry.blockedUntil = now + RATE_LIMIT_BLOCK;
     const remainSec = Math.ceil(RATE_LIMIT_BLOCK / 1000);
-    return { blocked: true, remainingSeconds: remainSec, message: `尝试次数过多，请${remainSec}秒后再试。如忘记密码，请查看 config.json 中的 resetKey 字段。` };
+    return { blocked: true, remainingSeconds: remainSec, message: `尝试次数过多，请${remainSec}秒后再试。如忘记密码，请使用恢复码。` };
   }
   return { blocked: false, remaining: RATE_LIMIT_MAX - entry.count };
 }
@@ -238,18 +238,7 @@ const server = http.createServer(async (req, res) => {
       jsonResponse(res, { error: '请输入密码' }, 400);
       return;
     }
-    // 检查配置文件中的恢复密码
     let storedHash = getSetting('admin_password');
-    if (config.resetKey && hashPassword(body.password) === hashPassword(config.resetKey)) {
-      // 用重置密钥恢复：更新 DB 中的密码
-      if (hashPassword(config.resetKey) !== storedHash) {
-        setSetting('admin_password', hashPassword(config.resetKey));
-      }
-      const sessionToken = createSession();
-      rateLimitMap.delete(ip);
-      jsonResponse(res, { token: sessionToken, recovered: true });
-      return;
-    }
     const inputHash = hashPassword(body.password);
     if (inputHash !== storedHash) {
       // 检查恢复码
@@ -264,8 +253,7 @@ const server = http.createServer(async (req, res) => {
         jsonResponse(res, { token: sessionToken, recovered: true });
         return;
       }
-      const hint = limit.remaining <= 1 ? '，忘记密码请查看 config.json 中的 resetKey 字段' : '';
-      jsonResponse(res, { error: `密码错误，还剩${limit.remaining}次尝试${hint}` }, 401);
+      jsonResponse(res, { error: `密码错误，还剩${limit.remaining}次尝试` }, 401);
       return;
     }
     rateLimitMap.delete(ip);
@@ -285,6 +273,12 @@ const server = http.createServer(async (req, res) => {
     if (body && body.regenerate === true) {
       const newCodes = generateRecoveryCodes(5);
       setRecoveryCodes(newCodes);
+      try {
+        const wPath = path.join(__dirname, '../deploy/cloudflare/wrangler.toml');
+        let w = fs.readFileSync(wPath, 'utf-8');
+        w = w.replace(/^RECOVERY_CODES\s*=\s*".*?"/m, `RECOVERY_CODES = "${newCodes.join(',')}"`);
+        fs.writeFileSync(wPath, w, 'utf-8');
+      } catch (_) {}
       jsonResponse(res, { codes: newCodes, count: newCodes.length });
       return;
     }
@@ -333,6 +327,12 @@ const server = http.createServer(async (req, res) => {
     config.adminPassword = body.newPassword;
     try {
       fs.writeFileSync(path.join(__dirname, '../config/config.json'), JSON.stringify(config, null, 2), 'utf-8');
+    } catch (_) {}
+    try {
+      const wPath = path.join(__dirname, '../deploy/cloudflare/wrangler.toml');
+      let w = fs.readFileSync(wPath, 'utf-8');
+      w = w.replace(/^ADMIN_PASSWORD\s*=\s*".*?"/m, `ADMIN_PASSWORD = "${body.newPassword}"`);
+      fs.writeFileSync(wPath, w, 'utf-8');
     } catch (_) {}
     jsonResponse(res, { ok: true });
     return;
@@ -619,7 +619,8 @@ async function start() {
       try { fs.writeFileSync(path.join(__dirname, '../config/config.json'), JSON.stringify(config, null, 2), 'utf-8'); } catch (_) {}
     }
     console.log(`[clip-relay] 管理员密码: ${config.adminPassword}`);
-    console.log('[clip-relay] 重置密钥（忘记密码时使用）: ' + (config.resetKey || '(未设置，默认同管理员密码)'));
+    const allCodes = getRecoveryCodes();
+    if (allCodes.length > 0) console.log(`[clip-relay] 管理员恢复码: ${allCodes.join('  ')}`);
   } else {
     console.log('[clip-relay] 使用已有管理员密码（来自数据库）');
   }
