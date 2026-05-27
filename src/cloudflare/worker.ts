@@ -70,14 +70,14 @@ function getClientIP(request: Request): string {
 }
 
 // --- Storage helpers ---
-function getSetting(key: string): string | null {
+async function getSetting(key: string): Promise<string | null> {
   const stmt = (globalThis as any).env.DB.prepare('SELECT value FROM settings WHERE key = ?');
-  const row = stmt.first(key) as any;
+  const row = await stmt.first(key) as any;
   return row?.value || null;
 }
 
-function setSetting(key: string, value: string) {
-  (globalThis as any).env.DB.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(key, value);
+async function setSetting(key: string, value: string) {
+  await (globalThis as any).env.DB.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(key, value);
 }
 
 async function handleLogin(request: Request, env: Env): Promise<Response> {
@@ -96,7 +96,7 @@ async function handleLogin(request: Request, env: Env): Promise<Response> {
   }
 
   const inputHash = await hashPassword(body.password);
-  const storedHash = getSetting('admin_password');
+  const storedHash = await getSetting('admin_password');
 
   // 密码匹配
   if (inputHash === storedHash) {
@@ -107,10 +107,9 @@ async function handleLogin(request: Request, env: Env): Promise<Response> {
     });
   }
 
-  // 恢复密码（环境变量/机密中的 adminPassword）
+  // 恢复密码
   if (env.ADMIN_PASSWORD && body.password === env.ADMIN_PASSWORD) {
-    // 用恢复密码更新 D1 hash
-    setSetting('admin_password', inputHash);
+    await setSetting('admin_password', inputHash);
     rateLimitMap.delete(ip);
     const sessionToken = createSession();
     return new Response(JSON.stringify({ token: sessionToken, recovered: true }), {
@@ -136,7 +135,7 @@ async function handleChangePassword(request: Request, env: Env): Promise<Respons
     return new Response(JSON.stringify({ error: '缺少参数' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
   }
 
-  const storedHash = getSetting('admin_password');
+  const storedHash = await getSetting('admin_password');
   const oldInputHash = await hashPassword(body.oldPassword);
 
   // 允许用恢复密码作为原密码
@@ -145,22 +144,24 @@ async function handleChangePassword(request: Request, env: Env): Promise<Respons
   }
 
   const newHash = await hashPassword(body.newPassword);
-  setSetting('admin_password', newHash);
+  await setSetting('admin_password', newHash);
 
   return new Response(JSON.stringify({ ok: true }), { headers: { 'Content-Type': 'application/json' } });
 }
 
-function handleGetRooms(): Response {
-  const rooms = (globalThis as any).env.DB.prepare('SELECT * FROM rooms ORDER BY created_at DESC').all().results || [];
+async function handleGetRooms(): Promise<Response> {
+  const db = (globalThis as any).env.DB;
+  const { results: rooms } = await db.prepare('SELECT * FROM rooms ORDER BY created_at DESC').all();
 
-  const enriched = rooms.map((r: any) => {
-    const msgCount = (globalThis as any).env.DB.prepare('SELECT COUNT(*) as count FROM messages WHERE room_token = ?').first(r.token) as any;
-    return {
+  const enriched = [];
+  for (const r of (rooms || [])) {
+    const msgCount = await db.prepare('SELECT COUNT(*) as count FROM messages WHERE room_token = ?').first(r.token) as any;
+    enriched.push({
       ...r,
       message_count: msgCount?.count || 0,
-      online_count: 0  // DO 动态查询，暂返回 0
-    };
-  });
+      online_count: 0
+    });
+  }
 
   return new Response(JSON.stringify(enriched), { headers: { 'Content-Type': 'application/json' } });
 }
@@ -180,7 +181,7 @@ async function handleCreateRoom(request: Request): Promise<Response> {
   const ttl = body.ttl_minutes !== undefined ? body.ttl_minutes : 30;
   const createdAt = new Date().toISOString();
 
-  (globalThis as any).env.DB.prepare(`
+  await (globalThis as any).env.DB.prepare(`
     INSERT OR REPLACE INTO rooms (token, name, ttl_minutes, created_at, disabled)
     VALUES (?, ?, ?, ?, 0)
   `).run(token, body.name, ttl, createdAt);
@@ -201,13 +202,13 @@ async function handleDeleteRoom(url: URL, request: Request): Promise<Response> {
   const token = decodeURIComponent(parts[4]);
 
   if (parts.length === 6 && parts[5] === 'messages') {
-    (globalThis as any).env.DB.prepare('DELETE FROM messages WHERE room_token = ?').run(token);
+    await (globalThis as any).env.DB.prepare('DELETE FROM messages WHERE room_token = ?').run(token);
     return new Response(JSON.stringify({ ok: true }), { headers: { 'Content-Type': 'application/json' } });
   }
 
   if (parts.length === 5 && token) {
-    (globalThis as any).env.DB.prepare('DELETE FROM rooms WHERE token = ?').run(token);
-    (globalThis as any).env.DB.prepare('DELETE FROM messages WHERE room_token = ?').run(token);
+    await (globalThis as any).env.DB.prepare('DELETE FROM rooms WHERE token = ?').run(token);
+    await (globalThis as any).env.DB.prepare('DELETE FROM messages WHERE room_token = ?').run(token);
     return new Response(JSON.stringify({ ok: true }), { headers: { 'Content-Type': 'application/json' } });
   }
 
@@ -225,13 +226,13 @@ async function handleToggleRoom(request: Request): Promise<Response> {
     return new Response(JSON.stringify({ error: '缺少 token' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
   }
 
-  const room = (globalThis as any).env.DB.prepare('SELECT * FROM rooms WHERE token = ?').first(body.token) as any;
+  const room = await (globalThis as any).env.DB.prepare('SELECT * FROM rooms WHERE token = ?').first(body.token) as any;
   if (!room) {
     return new Response(JSON.stringify({ error: '房间不存在' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
   }
 
   const newDisabled = room.disabled ? 0 : 1;
-  (globalThis as any).env.DB.prepare('UPDATE rooms SET disabled = ? WHERE token = ?').run(newDisabled, body.token);
+  await (globalThis as any).env.DB.prepare('UPDATE rooms SET disabled = ? WHERE token = ?').run(newDisabled, body.token);
 
   return new Response(JSON.stringify({ ok: true, disabled: newDisabled }), { headers: { 'Content-Type': 'application/json' } });
 }
@@ -268,9 +269,9 @@ export default {
     {
       const adminPwd = env.ADMIN_PASSWORD || 'admin';
       const adminHash = await hashPassword(adminPwd);
-      const storedHash = getSetting('admin_password');
+      const storedHash = await getSetting('admin_password');
       if (adminHash !== storedHash) {
-        setSetting('admin_password', adminHash);
+        await setSetting('admin_password', adminHash);
       }
     }
 
@@ -303,7 +304,7 @@ export default {
 
     // --- API Routes ---
     if (path === '/api/config') {
-      const domain = getSetting('domain') || '';
+      const domain = await getSetting('domain') || '';
       return new Response(JSON.stringify({
         defaultToken: env.DEFAULT_TOKEN || 'clip-relay',
         maxImageSize: parseInt(env.MAX_IMAGE_SIZE || '5242880'),
@@ -356,7 +357,7 @@ export default {
         return new Response(JSON.stringify({ error: '缺少域名参数' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
       }
       const domain = body.domain.trim();
-      setSetting('domain', domain);
+      await setSetting('domain', domain);
       return new Response(JSON.stringify({ ok: true, domain }), { headers: { 'Content-Type': 'application/json' } });
     }
 

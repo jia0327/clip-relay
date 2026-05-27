@@ -70,10 +70,10 @@ export class Room implements DurableObject {
         const conn = this.connections.get(ws);
         if (conn) conn.deviceType = deviceType;
 
-        let roomCfg = this.getRoomConfig(token);
+        let roomCfg = await this.getRoomConfig(token);
         if (!roomCfg) {
-          this.createRoom(token, '临时房间', 30);
-          roomCfg = this.getRoomConfig(token);
+          await this.createRoom(token, '临时房间', 30);
+          roomCfg = await this.getRoomConfig(token);
         }
 
         if (roomCfg && roomCfg.disabled) {
@@ -82,8 +82,8 @@ export class Room implements DurableObject {
           return;
         }
 
-        const messages = this.getRoomMessages(token);
-        const expiresIn = this.getExpiresIn(token);
+        const messages = await this.getRoomMessages(token);
+        const expiresIn = await this.getExpiresIn(token);
 
         this.send(ws, {
           type: 'joined',
@@ -106,7 +106,7 @@ export class Room implements DurableObject {
         break;
 
       case 'clear_messages':
-        this.deleteRoomMessages(token);
+        await this.deleteRoomMessages(token);
         this.broadcastAll({ type: 'messages_cleared' });
         break;
 
@@ -122,7 +122,7 @@ export class Room implements DurableObject {
           return;
         }
 
-        const record = this.addMessage(token, msg.content);
+        const record = await this.addMessage(token, msg.content);
         this.broadcastExcluding(ws, { type: 'message', message: record });
         break;
       }
@@ -147,7 +147,7 @@ export class Room implements DurableObject {
           return;
         }
 
-        const record = this.addImageMessage(token, msg.content, msg.filename || 'image.png');
+        const record = await this.addImageMessage(token, msg.content, msg.filename || 'image.png');
         this.broadcastExcluding(ws, { type: 'image', message: record });
         break;
       }
@@ -183,20 +183,20 @@ export class Room implements DurableObject {
     return Array.from(types);
   }
 
-  private removeConnection(token: string, ws: WebSocket) {
+  private async removeConnection(token: string, ws: WebSocket) {
     const conn = this.connections.get(ws);
     if (conn) {
       this.connections.delete(ws);
       this.broadcastAll({ type: 'device_left', device_type: conn.deviceType });
 
       if (this.connections.size === 0) {
-        this.scheduleAlarm(token);
+        await this.scheduleAlarm(token);
       }
     }
   }
 
   private async scheduleAlarm(token: string) {
-    const room = this.getRoomConfig(token);
+    const room = await this.getRoomConfig(token);
     if (!room || room.disabled) return;
 
     const ttl = room.ttl_minutes || 30;
@@ -219,28 +219,28 @@ export class Room implements DurableObject {
     }
   }
 
-  private getRoomConfig(token: string) {
-    return this.env.DB.prepare('SELECT * FROM rooms WHERE token = ?').first(token) as any;
+  private async getRoomConfig(token: string) {
+    return await this.env.DB.prepare('SELECT * FROM rooms WHERE token = ?').first(token) as any;
   }
 
-  private createRoom(token: string, name: string, ttlMinutes: number) {
+  private async createRoom(token: string, name: string, ttlMinutes: number) {
     const createdAt = new Date().toISOString();
-    this.env.DB.prepare(`
+    await this.env.DB.prepare(`
       INSERT OR REPLACE INTO rooms (token, name, ttl_minutes, created_at, disabled)
       VALUES (?, ?, ?, ?, 0)
     `).run(token, name, ttlMinutes, createdAt);
   }
 
-  private getRoomMessages(token: string, limit = 100) {
-    const rows = this.env.DB.prepare(
+  private async getRoomMessages(token: string, limit = 100) {
+    const rows = await this.env.DB.prepare(
       'SELECT * FROM messages WHERE room_token = ? ORDER BY id DESC LIMIT ?'
     ).all(token, limit);
     return (rows.results || []).reverse();
   }
 
-  private addMessage(roomToken: string, content: string) {
+  private async addMessage(roomToken: string, content: string) {
     const createdAt = new Date().toISOString();
-    const result = this.env.DB.prepare(
+    const result = await this.env.DB.prepare(
       'INSERT INTO messages (room_token, content, msg_type, created_at) VALUES (?, ?, ?, ?)'
     ).run(roomToken, content, 'text', createdAt);
 
@@ -253,9 +253,9 @@ export class Room implements DurableObject {
     };
   }
 
-  private addImageMessage(roomToken: string, content: string, filename: string) {
+  private async addImageMessage(roomToken: string, content: string, filename: string) {
     const createdAt = new Date().toISOString();
-    const result = this.env.DB.prepare(
+    const result = await this.env.DB.prepare(
       'INSERT INTO messages (room_token, content, msg_type, filename, created_at) VALUES (?, ?, ?, ?, ?)'
     ).run(roomToken, content, 'image', filename, createdAt);
 
@@ -269,12 +269,12 @@ export class Room implements DurableObject {
     };
   }
 
-  private deleteRoomMessages(roomToken: string) {
-    this.env.DB.prepare('DELETE FROM messages WHERE room_token = ?').run(roomToken);
+  private async deleteRoomMessages(roomToken: string) {
+    await this.env.DB.prepare('DELETE FROM messages WHERE room_token = ?').run(roomToken);
   }
 
-  private getExpiresIn(token: string): number {
-    const room = this.getRoomConfig(token);
+  private async getExpiresIn(token: string): Promise<number> {
+    const room = await this.getRoomConfig(token);
     if (!room) return 0;
 
     const ttl = room.ttl_minutes;
