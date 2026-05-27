@@ -1410,6 +1410,8 @@ body{
     </div>
     <button class="btn btn-primary" id="loginBtn">登录</button>
     <p class="login-error" id="loginError"></p>
+    <p style="font-size:12px;color:var(--accent);margin-top:16px;cursor:pointer;text-decoration:underline" id="forgotPwd" onclick="this.style.display='none';document.getElementById('recoveryHint').style.display='block'">忘记密码？</p>
+    <p id="recoveryHint" style="display:none;font-size:12px;color:var(--text-secondary);margin-top:8px;background:var(--bg);padding:10px 14px;border-radius:6px;text-align:left;line-height:1.6">忘记密码后，使用<strong>环境变量 RESET_KEY</strong> 或 <strong>config.json 中的 resetKey</strong> 的值作为密码登录即可恢复。<br><br>本地/Docker 部署查看 <code>config/config.json</code> 的 <code>resetKey</code> 字段；Cloudflare Workers 查看 Dashboard → Settings → Variables 中的 <code>RESET_KEY</code>。默认值与管理员密码相同。</p>
   </div>
 </div>
 
@@ -1637,7 +1639,8 @@ body{
       });
       const data=await resp.json();
       if(data.error){toast(data.error);return}
-      toast('密码已修改，请妥善保管');
+      toast('密码已修改');
+      alert('密码已修改。如忘记新密码，可用环境变量 RESET_KEY 的值恢复登录。');
       oldPwd.value='';newPwd.value='';
     }catch(e){toast('修改失败')}
   });

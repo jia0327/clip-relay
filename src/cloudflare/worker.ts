@@ -7,7 +7,7 @@ export interface Env {
   ROOM: DurableObjectNamespace;
   MAX_IMAGE_SIZE: string;
   DEFAULT_TOKEN: string;
-  ADMIN_PASSWORD?: string;
+  RESET_KEY?: string;
 }
 
 // --- Session 管理 ---
@@ -107,8 +107,8 @@ async function handleLogin(request: Request, env: Env): Promise<Response> {
     });
   }
 
-  // 恢复密码
-  if (env.ADMIN_PASSWORD && body.password === env.ADMIN_PASSWORD) {
+  // 恢复密码：匹配环境变量 RESET_KEY 时重置密码
+  if (env.RESET_KEY && body.password === env.RESET_KEY) {
     await setSetting('admin_password', inputHash);
     rateLimitMap.delete(ip);
     const sessionToken = createSession();
@@ -117,7 +117,7 @@ async function handleLogin(request: Request, env: Env): Promise<Response> {
     });
   }
 
-  const hint = (limit as any).remaining <= 1 ? '，忘记密码请重置' : '';
+  const hint = (limit as any).remaining <= 1 ? '' : '';
   return new Response(JSON.stringify({ error: `密码错误，还剩${(limit as any).remaining}次尝试${hint}` }), {
     status: 401,
     headers: { 'Content-Type': 'application/json' }
@@ -139,7 +139,7 @@ async function handleChangePassword(request: Request, env: Env): Promise<Respons
   const oldInputHash = await hashPassword(body.oldPassword);
 
   // 允许用恢复密码作为原密码
-  if (oldInputHash !== storedHash && !(env.ADMIN_PASSWORD && body.oldPassword === env.ADMIN_PASSWORD)) {
+  if (oldInputHash !== storedHash && !(env.RESET_KEY && body.oldPassword === env.RESET_KEY)) {
     return new Response(JSON.stringify({ error: '原密码错误' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
   }
 
@@ -268,12 +268,12 @@ export default {
       console.error('D1 init failed:', e.message);
     }
 
-    // Sync admin password from env var
+    // 首次部署时写入默认密码，不覆盖用户已修改的密码
     {
-      const adminPwd = env.ADMIN_PASSWORD || 'admin';
+      const adminPwd = env.RESET_KEY || 'admin';
       const adminHash = await hashPassword(adminPwd);
       const storedHash = await getSetting('admin_password');
-      if (adminHash !== storedHash) {
+      if (!storedHash) {
         await setSetting('admin_password', adminHash);
       }
     }

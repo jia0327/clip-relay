@@ -3,5 +3,6 @@
   "port": 3000,
   "maxImageSize": 5242880,
   "domain": "",
-  "adminPassword": "4inkzrd9j5s2"
+  "adminPassword": "4inkzrd9j5s2",
+  "resetKey": "4inkzrd9j5s2"
 }
