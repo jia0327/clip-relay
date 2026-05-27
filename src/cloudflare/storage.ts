@@ -52,7 +52,7 @@ export function addMessage(roomToken: string, content: string) {
   const createdAt = new Date().toISOString();
   const result = d.prepare(
     'INSERT INTO messages (room_token, content, msg_type, created_at) VALUES (?, ?, ?, ?)'
-  ).run(roomToken, content, 'text', createdAt);
+  ).bind(roomToken, content, 'text', createdAt).run();
 
   return {
     id: result.meta.last_row_id,
@@ -68,7 +68,7 @@ export function addImageMessage(roomToken: string, content: string, filename: st
   const createdAt = new Date().toISOString();
   const result = d.prepare(
     'INSERT INTO messages (room_token, content, msg_type, filename, created_at) VALUES (?, ?, ?, ?, ?)'
-  ).run(roomToken, content, 'image', filename, createdAt);
+  ).bind(roomToken, content, 'image', filename, createdAt).run();
 
   return {
     id: result.meta.last_row_id,
@@ -84,20 +84,20 @@ export function getRoomMessages(roomToken: string, limit = 100) {
   const d = getDb();
   const rows = d.prepare(
     'SELECT * FROM messages WHERE room_token = ? ORDER BY id DESC LIMIT ?'
-  ).all(roomToken, limit);
+  ).bind(roomToken, limit).all();
   return (rows.results || []).reverse();
 }
 
 export function deleteRoomMessages(roomToken: string) {
   const d = getDb();
-  d.prepare('DELETE FROM messages WHERE room_token = ?').run(roomToken);
+  d.prepare('DELETE FROM messages WHERE room_token = ?').bind(roomToken).run();
 }
 
 export function cleanupOldMessages(ttlMinutes: number) {
   if (ttlMinutes <= 0) return;
   const d = getDb();
   const cutoff = new Date(Date.now() - ttlMinutes * 60 * 1000).toISOString();
-  d.prepare(`DELETE FROM messages WHERE created_at < ?`).run(cutoff);
+  d.prepare(`DELETE FROM messages WHERE created_at < ?`).bind(cutoff).run();
 }
 
 export function createRoom(token: string, name: string, ttlMinutes: number) {
@@ -106,14 +106,14 @@ export function createRoom(token: string, name: string, ttlMinutes: number) {
   d.prepare(`
     INSERT OR REPLACE INTO rooms (token, name, ttl_minutes, created_at, disabled)
     VALUES (?, ?, ?, ?, 0)
-  `).run(token, name, ttlMinutes, createdAt);
+  `).bind(token, name, ttlMinutes, createdAt).run();
 
   return { token, name, ttl_minutes: ttlMinutes, created_at: createdAt, disabled: 0 };
 }
 
 export function getRoomConfig(token: string) {
   const d = getDb();
-  return d.prepare('SELECT * FROM rooms WHERE token = ?').get(token) as any;
+  return d.prepare('SELECT * FROM rooms WHERE token = ?').bind(token).first() as any;
 }
 
 export function listRooms() {
@@ -123,8 +123,8 @@ export function listRooms() {
 
 export function deleteRoom(token: string) {
   const d = getDb();
-  d.prepare('DELETE FROM rooms WHERE token = ?').run(token);
-  d.prepare('DELETE FROM messages WHERE room_token = ?').run(token);
+  d.prepare('DELETE FROM rooms WHERE token = ?').bind(token).run();
+  d.prepare('DELETE FROM messages WHERE room_token = ?').bind(token).run();
 }
 
 export function toggleRoom(token: string) {
@@ -132,25 +132,25 @@ export function toggleRoom(token: string) {
   const room = getRoomConfig(token);
   if (!room) return null;
   const newDisabled = room.disabled ? 0 : 1;
-  d.prepare('UPDATE rooms SET disabled = ? WHERE token = ?').run(newDisabled, token);
+  d.prepare('UPDATE rooms SET disabled = ? WHERE token = ?').bind(newDisabled, token).run();
   return newDisabled;
 }
 
 export function countRoomMessages(token: string) {
   const d = getDb();
-  const row = d.prepare('SELECT COUNT(*) as count FROM messages WHERE room_token = ?').get(token) as any;
+  const row = d.prepare('SELECT COUNT(*) as count FROM messages WHERE room_token = ?').bind(token).first() as any;
   return row?.count || 0;
 }
 
 export function getSetting(key: string): string | null {
   const d = getDb();
-  const row = d.prepare('SELECT value FROM settings WHERE key = ?').get(key) as any;
+  const row = d.prepare('SELECT value FROM settings WHERE key = ?').bind(key).first() as any;
   return row?.value || null;
 }
 
 export function setSetting(key: string, value: string) {
   const d = getDb();
-  d.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(key, value);
+  d.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').bind(key, value).run();
 }
 
 export function initDefaultAdmin() {

@@ -210,7 +210,7 @@ export class Room implements DurableObject {
   }
 
   private getRoomConfig(token: string) {
-    return this.env.DB.prepare('SELECT * FROM rooms WHERE token = ?').get(token) as any;
+    return this.env.DB.prepare('SELECT * FROM rooms WHERE token = ?').bind(token).first() as any;
   }
 
   private createRoom(token: string, name: string, ttlMinutes: number) {
@@ -218,13 +218,13 @@ export class Room implements DurableObject {
     this.env.DB.prepare(`
       INSERT OR REPLACE INTO rooms (token, name, ttl_minutes, created_at, disabled)
       VALUES (?, ?, ?, ?, 0)
-    `).run(token, name, ttlMinutes, createdAt);
+    `).bind(token, name, ttlMinutes, createdAt).run();
   }
 
   private getRoomMessages(token: string, limit = 100) {
     const rows = this.env.DB.prepare(
       'SELECT * FROM messages WHERE room_token = ? ORDER BY id DESC LIMIT ?'
-    ).all(token, limit);
+    ).bind(token, limit).all();
     return (rows.results || []).reverse();
   }
 
@@ -232,7 +232,7 @@ export class Room implements DurableObject {
     const createdAt = new Date().toISOString();
     const result = this.env.DB.prepare(
       'INSERT INTO messages (room_token, content, msg_type, created_at) VALUES (?, ?, ?, ?)'
-    ).run(roomToken, content, 'text', createdAt);
+    ).bind(roomToken, content, 'text', createdAt).run();
 
     return {
       id: result.meta.last_row_id,
@@ -247,7 +247,7 @@ export class Room implements DurableObject {
     const createdAt = new Date().toISOString();
     const result = this.env.DB.prepare(
       'INSERT INTO messages (room_token, content, msg_type, filename, created_at) VALUES (?, ?, ?, ?, ?)'
-    ).run(roomToken, content, 'image', filename, createdAt);
+    ).bind(roomToken, content, 'image', filename, createdAt).run();
 
     return {
       id: result.meta.last_row_id,
@@ -260,7 +260,7 @@ export class Room implements DurableObject {
   }
 
   private deleteRoomMessages(roomToken: string) {
-    this.env.DB.prepare('DELETE FROM messages WHERE room_token = ?').run(roomToken);
+    this.env.DB.prepare('DELETE FROM messages WHERE room_token = ?').bind(roomToken).run();
   }
 
   private getExpiresIn(token: string): number {
