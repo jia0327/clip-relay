@@ -218,7 +218,7 @@ body{
     <button class="btn btn-primary" id="loginBtn">登录</button>
     <p class="login-error" id="loginError"></p>
     <p style="font-size:12px;color:var(--accent);margin-top:16px;cursor:pointer;text-decoration:underline" id="forgotPwd" onclick="this.style.display='none';document.getElementById('recoveryHint').style.display='block'">忘记密码？</p>
-    <p id="recoveryHint" style="display:none;font-size:12px;color:var(--text-secondary);margin-top:8px;background:var(--bg);padding:12px 14px;border-radius:6px;text-align:left;line-height:1.7">忘记密码后，使用<strong>RESET_KEY</strong>作为密码登录，密码将重置为 <strong>admin</strong>。<br><br>· 本地/Docker：查看 <code>config/config.json</code> 的 <code>resetKey</code> 字段<br>· Cloudflare：查看 Dashboard → Variables 中的 <code>RESET_KEY</code></p>
+    <p id="recoveryHint" style="display:none;font-size:12px;color:var(--text-secondary);margin-top:8px;background:var(--bg);padding:12px 14px;border-radius:6px;text-align:left;line-height:1.7">🔑 使用 <strong>RESET_KEY</strong> 进行登录，成功后密码将强制重置为 <strong>admin</strong>。<br><br>📌 获取 RESET_KEY：<br>· 本地/Docker：查看 <code>config/config.json</code> 中的 <code>resetKey</code> 字段<br>· Cloudflare：前往 Dashboard → Variables 查看 <code>RESET_KEY</code></p>
   </div>
 </div>
 
