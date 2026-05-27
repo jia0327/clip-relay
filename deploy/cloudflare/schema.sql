@@ -14,10 +14,23 @@ CREATE TABLE IF NOT EXISTS rooms (
   name TEXT NOT NULL,
   ttl_minutes INTEGER NOT NULL DEFAULT 30,
   created_at TEXT NOT NULL,
+  expires_at TEXT,
   disabled INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS sessions (
+  token TEXT PRIMARY KEY,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS rate_limits (
+  ip TEXT PRIMARY KEY,
+  count INTEGER NOT NULL,
+  first_attempt_at TEXT NOT NULL,
+  blocked_until TEXT
 );

@@ -8,7 +8,6 @@
     "dev": "node --watch src/server.js"
   },
   "dependencies": {
-    "playwright": "^1.60.0",
     "sql.js": "^1.12.0",
     "ws": "^8.18.0"
   }

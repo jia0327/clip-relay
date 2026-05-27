@@ -2,8 +2,12 @@
 const sessions = new Map();
 const SESSION_TTL = 24 * 60 * 60 * 1000;
 
+let _generateId = () => Date.now().toString(36) + Math.random().toString(36).substring(2, 10);
+
+function setTokenGenerator(fn) { _generateId = fn; }
+
 function createSession() {
-  const token = Date.now().toString(36) + Math.random().toString(36).substring(2, 10);
+  const token = _generateId();
   sessions.set(token, { createdAt: Date.now() });
   return token;
 }
@@ -26,4 +30,4 @@ function cleanupExpiredSessions() {
   }
 }
 
-module.exports = { createSession, validateSession, cleanupExpiredSessions };
+module.exports = { createSession, validateSession, cleanupExpiredSessions, setTokenGenerator };

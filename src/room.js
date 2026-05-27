@@ -105,14 +105,18 @@ class RoomManager {
     const expired = [];
     for (const [token, room] of this.rooms) {
       if (room.expired) continue;
-      if (room.ttlMs === 0) continue; // 永久房间不清理
+      if (room.ttlMs === 0) {
+        // 永久房间无连接时释放内存（DB 记录保留，下次连接时重建）
+        if (room.connections.size === 0) this.rooms.delete(token);
+        continue;
+      }
       if (Date.now() - room.createdAt >= room.ttlMs) {
         room.expired = true;
         for (const [ws] of room.connections) {
           try {
             ws.send(JSON.stringify({ type: 'room_expired' }));
             ws.close(4001, 'Room expired');
-          } catch (_) {}
+          } catch (e) { /* ws.send 失败通常是客户端已断开 */ }
         }
         room.connections.clear();
         expired.push(token);

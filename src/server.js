@@ -6,9 +6,10 @@ const WebSocket = require('ws');
 const {
   initDB, addMessage, addImageMessage, getRoomMessages, deleteRoomMessages, cleanupOldMessages,
   createRoom, getRoomConfig, listRooms, deleteRoom, deleteExpiredRooms, countRoomMessages, toggleRoom,
-  getSetting, setSetting, initDefaultAdmin
+  getSetting, setSetting, initDefaultAdmin, flushDB
 } = require('./db');
-const { createSession, validateSession: _validateSession, cleanupExpiredSessions } = require('./shared/session');
+const { createSession, validateSession: _validateSession, cleanupExpiredSessions, setTokenGenerator } = require('./shared/session');
+setTokenGenerator(() => Date.now().toString(36) + crypto.randomBytes(8).toString('hex'));
 const { checkRateLimit, clearRateLimit } = require('./shared/rate-limit');
 const { generateToken } = require('./shared/token');
 const { RoomManager } = require('./room');
@@ -18,7 +19,7 @@ let config = { defaultToken: '', port: 3000, maxImageSize: 5 * 1024 * 1024 };
 try {
   const configData = fs.readFileSync(path.join(__dirname, '../config/config.json'), 'utf-8');
   config = { ...config, ...JSON.parse(configData) };
-} catch (_) {}
+} catch (e) { console.error('读取 config.json 失败，使用默认配置:', e.message); }
 
 const PORT = process.env.PORT || config.port;
 const MAX_PAYLOAD = config.maxImageSize + 1024 * 1024;
@@ -65,7 +66,11 @@ function serveStatic(req, res) {
       }
       return;
     }
-    res.writeHead(200, { 'Content-Type': contentType });
+    const headers = { 'Content-Type': contentType };
+    if (ext === '.html') {
+      headers['Content-Security-Policy'] = "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws: wss:;";
+    }
+    res.writeHead(200, headers);
     res.end(data);
   });
 }
@@ -186,9 +191,11 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     config.domain = body.domain.trim();
-    // 写回 config.json
     try {
-      fs.writeFileSync(path.join(__dirname, 'config.json'), JSON.stringify(config, null, 2), 'utf-8');
+      const configPath = path.join(__dirname, '../config/config.json');
+      const diskConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+      diskConfig.domain = config.domain;
+      fs.writeFileSync(configPath, JSON.stringify(diskConfig, null, 2), 'utf-8');
     } catch (e) {
       jsonResponse(res, { error: '配置文件写入失败' }, 500);
       return;
@@ -212,10 +219,6 @@ const server = http.createServer(async (req, res) => {
     }
     const newHash = hashPassword(body.newPassword);
     setSetting('admin_password', newHash);
-    config.adminPassword = body.newPassword;
-    try {
-      fs.writeFileSync(path.join(__dirname, '../config/config.json'), JSON.stringify(config, null, 2), 'utf-8');
-    } catch (_) {}
     jsonResponse(res, { ok: true });
     return;
   }
@@ -474,35 +477,36 @@ async function start() {
   // 确保 config 中有 resetKey，同步到 wrangler.toml
   if (!config.resetKey) {
     config.resetKey = crypto.randomBytes(16).toString('hex');
-    try { fs.writeFileSync(path.join(__dirname, '../config/config.json'), JSON.stringify(config, null, 2), 'utf-8'); } catch (_) {}
+    try { fs.writeFileSync(path.join(__dirname, '../config/config.json'), JSON.stringify(config, null, 2), 'utf-8'); } catch (e) { console.error('写入 resetKey 到 config.json 失败:', e.message); }
   }
   try {
     const wPath = path.join(__dirname, '../deploy/cloudflare/wrangler.toml');
     let w = fs.readFileSync(wPath, 'utf-8');
     w = w.replace(/^RESET_KEY\s*=\s*".*?"/m, `RESET_KEY = "${config.resetKey}"`);
     fs.writeFileSync(wPath, w, 'utf-8');
-  } catch (_) {}
+  } catch (_) { /* wrangler.toml 可能不存在（Docker 部署不含此文件） */ }
 
-  // 如果配置文件未设置密码
-  if (!config.adminPassword) {
+  // 首次安装：初始化管理员密码为 admin
+  const existingHash = getSetting('admin_password');
+  if (!existingHash) {
     setSetting('admin_password', hashPassword('admin'));
-    config.adminPassword = 'admin';
-    try { fs.writeFileSync(path.join(__dirname, '../config/config.json'), JSON.stringify(config, null, 2), 'utf-8'); } catch (_) {}
-    console.log(`[clip-relay] 管理员密码: admin`);
+    console.log('[clip-relay] 管理员密码: admin');
     console.log(`[clip-relay] 重置密钥 (RESET_KEY): ${config.resetKey}`);
   } else {
     console.log('[clip-relay] 使用已有管理员密码（来自数据库）');
   }
 
-  const adminPwd = config.adminPassword || getSetting('admin_password');
   server.listen(PORT, () => {
     console.log(`[clip-relay] 服务已启动 → http://0.0.0.0:${PORT}`);
     console.log(`[clip-relay] 管理后台 → http://0.0.0.0:${PORT}/admin`);
-    console.log(`[clip-relay] 管理员密码: ${typeof adminPwd === 'string' && adminPwd.length < 64 ? adminPwd : '(已设置)'}`);
+    console.log(`[clip-relay] 管理员密码: ${existingHash ? '(已设置)' : 'admin'}`);
     console.log('[clip-relay] 房间有效期: 30分钟（可通过后台设为永久）');
     console.log(`[clip-relay] 数据目录: ${path.join(__dirname, '../data')}`);
   });
 }
+
+process.on('SIGTERM', () => { flushDB(); process.exit(0); });
+process.on('SIGINT', () => { flushDB(); process.exit(0); });
 
 start().catch((err) => {
   console.error('启动失败:', err);

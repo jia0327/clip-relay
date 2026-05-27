@@ -1,9 +1,9 @@
 import type { DurableObjectNamespace, D1Database } from '@cloudflare/workers-types';
 import { Room } from './room';
 import { INDEX_HTML, ADMIN_HTML } from './static_pages';
+import { createSession, validateSession, cleanupExpiredSessions } from './session-store';
+import { checkRateLimit, clearRateLimit } from './rate-limit-store';
 
-const { createSession, validateSession, cleanupExpiredSessions } = require('../shared/session');
-const { checkRateLimit, clearRateLimit } = require('../shared/rate-limit');
 const { generateToken } = require('../shared/token');
 
 export interface Env {
@@ -14,13 +14,9 @@ export interface Env {
   RESET_KEY?: string;
 }
 
-function hashPassword(pw: string): string {
-  return crypto.subtle.digest('SHA-256', new TextEncoder().encode(pw))
-    .then(buf => Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join(''));
-}
-
-function checkRateLimitWrapper(ip: string): { blocked: boolean; remaining?: number; remainingSeconds?: number; message?: string } {
-  return checkRateLimit(ip);
+async function hashPassword(pw: string): Promise<string> {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pw));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 function getClientIP(request: Request): string {
@@ -40,7 +36,7 @@ async function setSetting(key: string, value: string) {
 
 async function handleLogin(request: Request, env: Env): Promise<Response> {
   const ip = getClientIP(request);
-  const limit = checkRateLimit(ip);
+  const limit = await checkRateLimit(ip);
   if (limit.blocked) {
     return new Response(JSON.stringify({ error: limit.message || `尝试次数过多，请${limit.remainingSeconds}秒后再试` }), {
       status: 429,
@@ -58,7 +54,7 @@ async function handleLogin(request: Request, env: Env): Promise<Response> {
 
   // 密码匹配
   if (inputHash === storedHash) {
-    clearRateLimit(ip);
+    await clearRateLimit(ip);
     const sessionToken = createSession();
     return new Response(JSON.stringify({ token: sessionToken }), {
       headers: { 'Content-Type': 'application/json' }
@@ -68,7 +64,7 @@ async function handleLogin(request: Request, env: Env): Promise<Response> {
   // 恢复：匹配 RESET_KEY → 重置为 admin
   if (env.RESET_KEY && body.password === env.RESET_KEY) {
     await setSetting('admin_password', await hashPassword('admin'));
-    clearRateLimit(ip);
+    await clearRateLimit(ip);
     const sessionToken = createSession();
     return new Response(JSON.stringify({ token: sessionToken, recovered: true, message: '密码已重置为 admin，请及时修改密码' }), {
       headers: { 'Content-Type': 'application/json' }
@@ -84,7 +80,7 @@ async function handleLogin(request: Request, env: Env): Promise<Response> {
 
 async function handleChangePassword(request: Request, env: Env): Promise<Response> {
   const auth = request.headers.get('Authorization') || '';
-  if (!validateSession(auth)) {
+  if (!await validateSession(auth)) {
     return new Response(JSON.stringify({ error: '未登录' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
   }
 
@@ -131,7 +127,7 @@ async function handleGetRooms(): Promise<Response> {
 
 async function handleCreateRoom(request: Request): Promise<Response> {
   const auth = request.headers.get('Authorization') || '';
-  if (!validateSession(auth)) {
+  if (!await validateSession(auth)) {
     return new Response(JSON.stringify({ error: '未登录' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
   }
 
@@ -158,7 +154,7 @@ async function handleCreateRoom(request: Request): Promise<Response> {
 
 async function handleDeleteRoom(url: URL, request: Request): Promise<Response> {
   const auth = request.headers.get('Authorization') || '';
-  if (!validateSession(auth)) {
+  if (!await validateSession(auth)) {
     return new Response(JSON.stringify({ error: '未登录' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
   }
 
@@ -181,7 +177,7 @@ async function handleDeleteRoom(url: URL, request: Request): Promise<Response> {
 
 async function handleToggleRoom(request: Request): Promise<Response> {
   const auth = request.headers.get('Authorization') || '';
-  if (!validateSession(auth)) {
+  if (!await validateSession(auth)) {
     return new Response(JSON.stringify({ error: '未登录' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
   }
 
@@ -205,7 +201,6 @@ async function handleToggleRoom(request: Request): Promise<Response> {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     (globalThis as any).env = env;
-    cleanupExpiredSessions();
 
     // Auto-initialize D1 tables
     try {
@@ -215,6 +210,8 @@ export default {
       // 兼容旧表：已存在但缺少 expires_at 列时补充
       try { await env.DB.exec("ALTER TABLE rooms ADD COLUMN expires_at TEXT"); } catch (e: any) {}
       await env.DB.exec('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
+      await env.DB.exec('CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, created_at TEXT NOT NULL)');
+      await env.DB.exec('CREATE TABLE IF NOT EXISTS rate_limits (ip TEXT PRIMARY KEY, count INTEGER NOT NULL, first_attempt_at TEXT NOT NULL, blocked_until TEXT)');
     } catch (e: any) {
       console.error('D1 init failed:', e.message);
     }
@@ -226,6 +223,8 @@ export default {
         await setSetting('admin_password', await hashPassword('admin'));
       }
     }
+
+    await cleanupExpiredSessions();
 
     const url = new URL(request.url);
     const path = url.pathname;
@@ -302,7 +301,7 @@ export default {
 
     if (path === '/api/admin/domain' && request.method === 'POST') {
       const auth = request.headers.get('Authorization') || '';
-      if (!validateSession(auth)) {
+      if (!await validateSession(auth)) {
         return new Response(JSON.stringify({ error: '未登录' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
       }
       const body = await request.json() as any;
@@ -316,7 +315,7 @@ export default {
 
     // Serve frontend pages
     if (path === '/admin') {
-      return new Response(ADMIN_HTML, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+      return new Response(ADMIN_HTML, { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Content-Security-Policy': "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' wss:" } });
     }
 
     // Root without token → redirect to admin
@@ -324,7 +323,7 @@ export default {
       return Response.redirect(`${url.origin}/admin`, 302);
     }
 
-    return new Response(INDEX_HTML, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+    return new Response(INDEX_HTML, { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Content-Security-Policy': "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' wss:" } });
   }
 };
 

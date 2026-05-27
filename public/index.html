@@ -1154,6 +1154,7 @@ function appendMessageCard(msg, isNew, container) {
   // --- 初始化 ---
   async function init() {
     deviceSelect.value = detectDevice();
+    installDelayedPermissionRequest();
 
     // 同步检查 URL token（不等异步请求）
     const params = new URLSearchParams(location.search);

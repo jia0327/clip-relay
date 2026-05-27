@@ -42,7 +42,7 @@ async function initDB() {
   `);
 
   migrateColumns();
-  persistDB();
+  doPersist();
   return db;
 }
 
@@ -52,12 +52,37 @@ function migrateColumns() {
   try { db.run('CREATE TABLE IF NOT EXISTS rooms (token TEXT PRIMARY KEY, name TEXT NOT NULL, ttl_minutes INTEGER NOT NULL DEFAULT 30, created_at TEXT NOT NULL)'); } catch (_) {}
   try { db.run('ALTER TABLE rooms ADD COLUMN disabled INTEGER NOT NULL DEFAULT 0'); } catch (_) {}
   try { db.run('ALTER TABLE rooms ADD COLUMN expires_at TEXT'); } catch (_) {}
-  persistDB();
+  doPersist();
+}
+
+let persistTimer = null;
+const PERSIST_DEBOUNCE_MS = 1000;
+
+function schedulePersist() {
+  if (persistTimer) return;
+  persistTimer = setTimeout(() => {
+    doPersist();
+    persistTimer = null;
+  }, PERSIST_DEBOUNCE_MS);
+}
+
+function doPersist() {
+  const data = db.export();
+  const tmpPath = DB_PATH + '.tmp';
+  fs.writeFileSync(tmpPath, Buffer.from(data));
+  fs.renameSync(tmpPath, DB_PATH);
+}
+
+function flushDB() {
+  if (persistTimer) {
+    clearTimeout(persistTimer);
+    persistTimer = null;
+  }
+  doPersist();
 }
 
 function persistDB() {
-  const data = db.export();
-  fs.writeFileSync(DB_PATH, Buffer.from(data));
+  schedulePersist();
 }
 
 // --- 消息 ---
@@ -102,9 +127,11 @@ function deleteRoomMessages(roomToken) {
 }
 
 function cleanupOldMessages() {
-  // 删除所有非永久房间的过期消息
-  const cutoff = new Date(Date.now() - 30 * 60 * 1000).toISOString();
-  db.run(`DELETE FROM messages WHERE room_token NOT IN (SELECT token FROM rooms WHERE ttl_minutes = 0) AND created_at < ?`, [cutoff]);
+  const now = new Date().toISOString();
+  // 优先用 expires_at 精确判断过期房间
+  db.run(`DELETE FROM messages WHERE room_token IN (SELECT token FROM rooms WHERE expires_at IS NOT NULL AND expires_at < ?)`, [now]);
+  // fallback: 没有 expires_at 的旧房间用 created_at + ttl_minutes 推算
+  db.run(`DELETE FROM messages WHERE room_token IN (SELECT token FROM rooms WHERE expires_at IS NULL AND ttl_minutes > 0 AND datetime(created_at, '+' || ttl_minutes || ' minutes') < ?)`, [now]);
   persistDB();
 }
 
@@ -159,14 +186,19 @@ function deleteExpiredRooms() {
 }
 
 function deleteRoom(token) {
-  db.run('DELETE FROM rooms WHERE token = ?', [token]);
-  db.run('DELETE FROM messages WHERE room_token = ?', [token]);
+  db.run('BEGIN');
+  try {
+    db.run('DELETE FROM messages WHERE room_token = ?', [token]);
+    db.run('DELETE FROM rooms WHERE token = ?', [token]);
+    db.run('COMMIT');
+  } catch (e) {
+    db.run('ROLLBACK');
+    throw e;
+  }
   persistDB();
 }
 
 function countRoomMessages(token) {
-  const result = db.exec('SELECT COUNT(*) as c FROM messages WHERE room_token = ?', [token]);
-  // sql.js exec with params doesn't work like this, use prepare
   const stmt = db.prepare('SELECT COUNT(*) as c FROM messages WHERE room_token = ?');
   stmt.bind([token]);
   let count = 0;
@@ -206,5 +238,6 @@ module.exports = {
   addMessage, addImageMessage, getRoomMessages, deleteRoomMessages, cleanupOldMessages,
   createRoom, getRoomConfig, listRooms, deleteRoom, deleteExpiredRooms, countRoomMessages,
   toggleRoom,
-  getSetting, setSetting, initDefaultAdmin
+  getSetting, setSetting, initDefaultAdmin,
+  flushDB
 };

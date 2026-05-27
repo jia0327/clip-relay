@@ -1155,6 +1155,7 @@ function appendMessageCard(msg, isNew, container) {
   // --- 初始化 ---
   async function init() {
     deviceSelect.value = detectDevice();
+    installDelayedPermissionRequest();
 
     // 同步检查 URL token（不等异步请求）
     const params = new URLSearchParams(location.search);
@@ -1691,7 +1692,7 @@ body{
           <td style="font-size:12px;color:var(--text-muted)">\${r.expires_at?formatTime(r.expires_at):'<span style="color:var(--text-muted)">—</span>'}</td>
           <td><div class="actions">
             <button class="btn btn-secondary btn-sm" data-copy="\${escapeAttr(link)}">复制链接</button>
-            <button class="btn btn-sm btn-toggle" data-toggle="\${escapeAttr(r.token)}">\${toggleLabel}</button>
+            <button class="btn btn-sm \${toggleClass}" data-toggle="\${escapeAttr(r.token)}">\${toggleLabel}</button>
             <button class="btn btn-secondary btn-sm" data-clear="\${escapeAttr(r.token)}">清空</button>
             <button class="btn btn-danger btn-sm" data-delete="\${escapeAttr(r.token)}">删除</button>
           </div></td>
