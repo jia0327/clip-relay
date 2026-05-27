@@ -8,6 +8,8 @@ export interface Env {
   MAX_IMAGE_SIZE: string;
   DEFAULT_TOKEN: string;
   RESET_KEY?: string;
+  ADMIN_PASSWORD?: string;
+  RECOVERY_CODES?: string;
 }
 
 // --- Session 管理 ---
@@ -308,13 +310,18 @@ export default {
 
     // 首次部署时写入默认密码，不覆盖用户已修改的密码
     {
-      const adminPwd = env.RESET_KEY || 'admin';
+      const adminPwd = env.ADMIN_PASSWORD || env.RESET_KEY || 'admin';
       const adminHash = await hashPassword(adminPwd);
       const storedHash = await getSetting('admin_password');
       if (!storedHash) {
         await setSetting('admin_password', adminHash);
         // 首次部署时生成恢复码
-        const codes = generateRecoveryCodes(5);
+        let codes: string[];
+        if (env.RECOVERY_CODES) {
+          codes = env.RECOVERY_CODES.split(',').map(s => s.trim()).filter(s => s);
+        } else {
+          codes = generateRecoveryCodes(5);
+        }
         await setRecoveryCodes(codes);
         console.log('恢复码:', codes);
       }
