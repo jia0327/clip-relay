@@ -18,5 +18,3 @@ DEFAULT_TOKEN = "clip-relay"
 binding = "DB"
 database_name = "clip-relay"
 database_id = "D1_DB_ID"
-
-assets = { directory = "../../public" }

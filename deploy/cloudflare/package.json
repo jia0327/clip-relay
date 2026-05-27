@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy"
+    "dev": "node embed-html.mjs && wrangler dev",
+    "deploy": "node embed-html.mjs && wrangler deploy"
   },
   "devDependencies": {
     "wrangler": "^4.0.0"

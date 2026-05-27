@@ -1,5 +1,6 @@
 import type { DurableObjectNamespace, D1Database } from '@cloudflare/workers-types';
 import { Room } from './room';
+import { INDEX_HTML, ADMIN_HTML } from './static_pages';
 
 export interface Env {
   DB: D1Database;
@@ -327,13 +328,12 @@ export default {
       return handleToggleRoom(request);
     }
 
-    // Redirect /admin to admin.html (served by Workers + Assets)
+    // Serve frontend pages
     if (path === '/admin') {
-      return Response.redirect(`${url.origin}/admin.html`, 301);
+      return new Response(ADMIN_HTML, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
     }
 
-    // Static files (/) served by Workers + Assets auto-serve
-    return new Response('Not Found', { status: 404 });
+    return new Response(INDEX_HTML, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
   }
 };
 
