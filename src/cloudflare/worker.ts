@@ -286,10 +286,11 @@ export default {
 
     // --- API Routes ---
     if (path === '/api/config') {
+      const domain = getSetting('domain') || '';
       return new Response(JSON.stringify({
         defaultToken: env.DEFAULT_TOKEN || 'clip-relay',
         maxImageSize: parseInt(env.MAX_IMAGE_SIZE || '5242880'),
-        domain: '',
+        domain,
         lanIP: ''
       }), { headers: { 'Content-Type': 'application/json' } });
     }
@@ -326,6 +327,20 @@ export default {
 
     if (path === '/api/admin/rooms/toggle' && request.method === 'POST') {
       return handleToggleRoom(request);
+    }
+
+    if (path === '/api/admin/domain' && request.method === 'POST') {
+      const auth = request.headers.get('Authorization') || '';
+      if (!validateSession(auth)) {
+        return new Response(JSON.stringify({ error: '未登录' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+      }
+      const body = await request.json() as any;
+      if (!body || typeof body.domain !== 'string') {
+        return new Response(JSON.stringify({ error: '缺少域名参数' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+      }
+      const domain = body.domain.trim();
+      setSetting('domain', domain);
+      return new Response(JSON.stringify({ ok: true, domain }), { headers: { 'Content-Type': 'application/json' } });
     }
 
     // Serve frontend pages
