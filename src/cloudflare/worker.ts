@@ -1,5 +1,4 @@
-import { DurableObjectNamespace } from '@cloudflare/workers-types';
-import type { D1Database } from '@cloudflare/workers-types';
+import type { DurableObjectNamespace, D1Database } from '@cloudflare/workers-types';
 import { Room } from './room';
 
 export interface Env {
