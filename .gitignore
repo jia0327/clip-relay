@@ -1,3 +1,8 @@
 node_modules/
 data/
-CLAUDE.md
+CLAUDE.md/
+.env
+*.log
+.DS_Store
+.vscode/
+.idea/

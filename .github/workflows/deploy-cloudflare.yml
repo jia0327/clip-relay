@@ -1,0 +1,44 @@
+name: Deploy to Cloudflare Workers
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/cloudflare/**'
+      - 'deploy/cloudflare/**'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Dependencies
+        run: |
+          cd deploy/cloudflare
+          npm install
+
+      - name: Update wrangler.toml with D1 ID
+        run: |
+          cd deploy/cloudflare
+          sed -i 's/D1_DB_ID/'${{ secrets.D1_DATABASE_ID }}'/' wrangler.toml
+        env:
+          D1_ID: ${{ secrets.D1_DATABASE_ID }}
+
+      - name: Deploy to Cloudflare
+        run: |
+          cd deploy/cloudflare
+          npx wrangler deploy
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}

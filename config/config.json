@@ -1,0 +1,7 @@
+{
+  "defaultToken": "clip-relay",
+  "port": 3000,
+  "maxImageSize": 5242880,
+  "domain": "",
+  "adminPassword": "4inkzrd9j5s2"
+}

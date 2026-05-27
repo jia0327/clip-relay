@@ -1,0 +1,16 @@
+name = "clip-relay"
+main = "../src/cloudflare/worker.ts"
+compatibility_date = "2025-01-01"
+
+[[durable_objects.bindings]]
+name = "ROOM"
+class_name = "Room"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["Room"]
+
+[vars]
+MAX_IMAGE_SIZE = "5242880"
+DEFAULT_TOKEN = "clip-relay"
+# D1 配置在 .dev.vars 中本地调试用 生产用 secrets

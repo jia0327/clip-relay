@@ -2,10 +2,10 @@
   "name": "clip-relay",
   "version": "1.0.0",
   "description": "基于时间窗口的私有房间制文本中继系统",
-  "main": "server.js",
+  "main": "src/server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node --watch server.js"
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
   },
   "dependencies": {
     "playwright": "^1.60.0",
