@@ -74,19 +74,20 @@ export class Room implements DurableObject {
       case 'join': {
         const deviceType = msg.device_type || 'desktop';
 
-        let roomCfg = await this.getRoomConfig(token);
+        const roomCfg = await this.getRoomConfig(token);
         if (!roomCfg) {
-          await this.createRoom(token, '临时房间', 30);
-          roomCfg = await this.getRoomConfig(token);
+          this.send(ws, { type: 'error', message: '房间不存在，请联系管理员获取有效链接' });
+          ws.close(4003, 'Room not found');
+          return;
         }
 
-        if (roomCfg && roomCfg.disabled === 1) {
+        if (roomCfg.disabled === 1) {
           this.send(ws, { type: 'error', message: '房间已停用，请联系管理员' });
           ws.close(4002, 'Room disabled');
           return;
         }
 
-        if (roomCfg && roomCfg.disabled === 2) {
+        if (roomCfg.disabled === 2) {
           this.send(ws, { type: 'error', message: '房间已过期' });
           ws.close(4001, 'Room expired');
           return;

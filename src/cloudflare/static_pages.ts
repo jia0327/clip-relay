@@ -242,6 +242,34 @@ body {
 [data-theme=\\"dark\\"] .msg-card.local { background: var(--bubble-self); color: var(--bubble-self-text); }
 [data-theme=\\"dark\\"] .msg-card.local:hover { filter: brightness(1.08); }
 
+.msg-card.history-msg {
+  background: #dce6f5;
+  padding: 8px 14px;
+  opacity: 1;
+  box-shadow: none;
+  border-radius: 6px 14px 14px 14px;
+}
+.msg-card.history-msg .msg-content {
+  color: #1a3a7a;
+  font-weight: 500;
+}
+[data-theme="dark"] .msg-card.history-msg {
+  background: #1a2538;
+}
+[data-theme="dark"] .msg-card.history-msg .msg-content {
+  color: #8aaff5;
+}
+.msg-card.history-msg.local {
+  background: #c8e6d0;
+  border-radius: 14px 6px 14px 14px;
+}
+.msg-card.history-msg.local .msg-content { color: #1a3a7a; }
+[data-theme="dark"] .msg-card.history-msg.local {
+  background: #1a2e24;
+}
+[data-theme="dark"] .msg-card.history-msg.local .msg-content { color: #8aaff5; }
+.msg-card.history-msg .msg-meta { margin-top: 2px; font-size: 10px; }
+
 .msg-card.image-card {
   padding: 3px;
   cursor: pointer;
@@ -251,6 +279,8 @@ body {
   overflow: hidden;
 }
 .msg-card.image-card.local { border-radius: 16px; }
+.msg-card.image-card.history-msg { max-width: 170px; }
+.msg-card.image-card.history-msg .msg-image { max-height: 110px; }
 .msg-card .msg-image {
   width: 100%;
   max-height: 240px;
@@ -283,13 +313,6 @@ body {
 }
 
 /* --- 历史折叠 --- */
-.history-msg .msg-content {
-  color: #1a3a7a;
-  font-weight: 500;
-}
-[data-theme="dark"] .history-msg .msg-content {
-  color: #7a9ff5;
-}
 .history-fold {
   width: 100%;
   text-align: center;
@@ -673,7 +696,7 @@ body {
     ws.onclose = (event) => {
       if (event.code === 4001) {
         handleExpired();
-      } else {
+      } else if (event.code !== 4003) {
         setTimeout(() => { if (!ws || ws.readyState > 1) connect(); }, 3000);
       }
     };
@@ -740,27 +763,19 @@ body {
         }
         roomBanner.style.display = '';
 
-        const allMessages = data.messages || [];
-        const historyCount = Math.max(0, allMessages.length - 5);
-        const visibleMessages = allMessages.slice(historyCount);
-
-        // 最新 5 条直接显示
-        for (const m of visibleMessages) {
-          appendMessageCard(m, false);
-        }
-
-        // 历史消息放入折叠区
-        if (historyCount > 0) {
-          for (let i = 0; i < historyCount; i++) {
-            appendMessageCard(allMessages[i], false, historySection);
+        if (data.messages.length > 0) {
+          // 历史消息放入折叠区
+          for (const m of data.messages) {
+            appendMessageCard(m, false, historySection);
           }
-          historyFold.innerHTML = \`<hr class="history-sep"><button class="history-fold-btn" id="historyToggle">展开历史消息 (\${allMessages.length}条)</button>\`;
+          // 显示折叠按钮
+          historyFold.innerHTML = \`<hr class="history-sep"><button class="history-fold-btn" id="historyToggle">展开历史消息 (\${data.messages.length}条)</button>\`;
           const toggleBtn = historyFold.querySelector('#historyToggle');
           toggleBtn.addEventListener('click', () => {
             const show = historySection.classList.toggle('show');
             toggleBtn.textContent = show
-              ? \`收起历史消息 (\${allMessages.length}条)\`
-              : \`展开历史消息 (\${allMessages.length}条)\`;
+              ? \`收起历史消息 (\${data.messages.length}条)\`
+              : \`展开历史消息 (\${data.messages.length}条)\`;
           });
         }
         scrollToBottom();
@@ -819,13 +834,13 @@ body {
 
 function appendMessageCard(msg, isNew, container) {
     const target = container || msgList;
+    const isHistory = target === historySection;
     const card = document.createElement('div');
     const isImage = msg.msg_type === 'image';
-    const isHistory = container === historySection;
     card.className = 'msg-card'
       + (isNew ? ' new-msg' : '')
-      + (isImage ? ' image-card' : '')
-      + (isHistory ? ' history-msg' : '');
+      + (isHistory ? ' history-msg' : '')
+      + (isImage ? ' image-card' : '');
     card.dataset.msgId = msg.id;
     card.dataset.msgType = msg.msg_type || 'text';
 
@@ -867,7 +882,6 @@ function appendMessageCard(msg, isNew, container) {
       showToast('已复制');
     });
 
-    // 插入消息
     target.appendChild(card);
 
     if (isNew) {
@@ -907,7 +921,7 @@ function appendMessageCard(msg, isNew, container) {
   function handleExpired() {
     statusBadge.textContent = '已过期';
     statusBadge.className = 'status-badge expired';
-    showToast('房间已过期');
+    showToast('房间已过期（30分钟）');
     msgInput.disabled = true;
     sendBtn.disabled = true;
     imgBtn.disabled = true;
@@ -1707,7 +1721,7 @@ body{
         });
       });
     }catch(e){
-      roomList.innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--danger);padding:32px">加载失败</td></tr>';
+      roomList.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--danger);padding:32px">加载失败</td></tr>';
     }
   }
 

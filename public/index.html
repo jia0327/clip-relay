@@ -242,16 +242,32 @@ body {
 [data-theme=\"dark\"] .msg-card.local:hover { filter: brightness(1.08); }
 
 .msg-card.history-msg {
-  padding: 5px 11px;
-  font-size: 12px;
-  line-height: 1.4;
-  opacity: 0.5;
-  border-radius: 4px 14px 14px 14px;
+  background: #dce6f5;
+  padding: 8px 14px;
+  opacity: 1;
   box-shadow: none;
+  border-radius: 6px 14px 14px 14px;
 }
-.msg-card.history-msg.local { border-radius: 14px 4px 14px 14px; }
-.msg-card.history-msg:hover { opacity: 0.85; transform: none; }
-.msg-card.history-msg .msg-meta { margin-top: 1px; font-size: 9px; }
+.msg-card.history-msg .msg-content {
+  color: #1a3a7a;
+  font-weight: 500;
+}
+[data-theme="dark"] .msg-card.history-msg {
+  background: #1a2538;
+}
+[data-theme="dark"] .msg-card.history-msg .msg-content {
+  color: #8aaff5;
+}
+.msg-card.history-msg.local {
+  background: #c8e6d0;
+  border-radius: 14px 6px 14px 14px;
+}
+.msg-card.history-msg.local .msg-content { color: #1a3a7a; }
+[data-theme="dark"] .msg-card.history-msg.local {
+  background: #1a2e24;
+}
+[data-theme="dark"] .msg-card.history-msg.local .msg-content { color: #8aaff5; }
+.msg-card.history-msg .msg-meta { margin-top: 2px; font-size: 10px; }
 
 .msg-card.image-card {
   padding: 3px;
@@ -318,7 +334,7 @@ body {
   display: none;
   flex-direction: column;
   align-items: flex-start;
-  gap: 2px;
+  gap: 6px;
   width: 100%;
 }
 .history-section.show { display: flex; }
@@ -575,6 +591,7 @@ body {
       <textarea class="msg-textarea" id="msgInput" placeholder="输入消息" rows="1" autocomplete="off"></textarea>
       <button class="btn-icon" id="imgBtn" title="发送图片">🖼</button>
       <input type="file" id="imgInput" accept="image/*" style="display:none">
+      <a href="https://upfile.live/zh-cn/" target="_blank" rel="noopener" class="btn-icon" id="fileBtn" title="文件传送（第三方）">📎</a>
       <button class="btn btn-primary" id="sendBtn">发送</button>
     </div>
   </div>
@@ -678,7 +695,7 @@ body {
     ws.onclose = (event) => {
       if (event.code === 4001) {
         handleExpired();
-      } else {
+      } else if (event.code !== 4003) {
         setTimeout(() => { if (!ws || ws.readyState > 1) connect(); }, 3000);
       }
     };
@@ -864,12 +881,7 @@ function appendMessageCard(msg, isNew, container) {
       showToast('已复制');
     });
 
-    // 插入到历史折叠按钮之前
-    if (target === msgList && historyFold.children.length > 0) {
-      msgList.insertBefore(card, historyFold);
-    } else {
-      target.appendChild(card);
-    }
+    target.appendChild(card);
 
     if (isNew) {
       scrollToBottom();
@@ -984,11 +996,7 @@ function appendMessageCard(msg, isNew, container) {
       copyToClipboard(sel || content);
       showToast('已复制');
     });
-    if (historyFold.children.length > 0) {
-      msgList.insertBefore(card, historyFold);
-    } else {
-      msgList.appendChild(card);
-    }
+    msgList.appendChild(card);
     scrollToBottom();
   }
 
