@@ -210,7 +210,12 @@ export class Room implements DurableObject {
       if (!room || room.disabled) return;
 
       const ttl = room.ttl_minutes || 30;
-      if (ttl <= 0) return;
+      if (ttl <= 0) {
+        // 永久房间，取消已有 alarm 防止旧 alarm 误触发
+        await this.ctx.storage.deleteAlarm().catch(() => {});
+        await this.ctx.storage.delete('token').catch(() => {});
+        return;
+      }
 
       const created = new Date(room.created_at).getTime();
       const expires = created + ttl * 60 * 1000;
@@ -227,9 +232,11 @@ export class Room implements DurableObject {
     const token = await this.ctx.storage.get('token') as string;
     if (token) {
       try {
-        // 标记房间为过期 (disabled = 2)
+        const room = await this.getRoomConfig(token);
+        // 房间已删除/停用/永久 → 不处理
+        if (!room || room.disabled !== 0 || room.ttl_minutes === 0) return;
+
         await this.env.DB.prepare('UPDATE rooms SET disabled = 2 WHERE token = ?').bind(token).run();
-        // 删除房间消息
         await this.env.DB.prepare('DELETE FROM messages WHERE room_token = ?').bind(token).run();
       } catch (e: any) {
         console.error('alarm cleanup error:', e?.message || e);
