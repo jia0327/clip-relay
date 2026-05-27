@@ -7,7 +7,7 @@ export interface Env {
   ROOM: DurableObjectNamespace;
   MAX_IMAGE_SIZE: string;
   DEFAULT_TOKEN: string;
-  adminPassword?: string;
+  ADMIN_PASSWORD?: string;
 }
 
 // --- Session 管理 ---
@@ -108,7 +108,7 @@ async function handleLogin(request: Request, env: Env): Promise<Response> {
   }
 
   // 恢复密码（环境变量/机密中的 adminPassword）
-  if (env.adminPassword && body.password === env.adminPassword) {
+  if (env.ADMIN_PASSWORD && body.password === env.ADMIN_PASSWORD) {
     // 用恢复密码更新 D1 hash
     setSetting('admin_password', inputHash);
     rateLimitMap.delete(ip);
@@ -140,7 +140,7 @@ async function handleChangePassword(request: Request, env: Env): Promise<Respons
   const oldInputHash = await hashPassword(body.oldPassword);
 
   // 允许用恢复密码作为原密码
-  if (oldInputHash !== storedHash && !(env.adminPassword && body.oldPassword === env.adminPassword)) {
+  if (oldInputHash !== storedHash && !(env.ADMIN_PASSWORD && body.oldPassword === env.ADMIN_PASSWORD)) {
     return new Response(JSON.stringify({ error: '原密码错误' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
   }
 
@@ -264,11 +264,14 @@ export default {
       console.error('D1 init failed:', e.message);
     }
 
-    // Initialize default admin if needed
-    const existingPassword = getSetting('admin_password');
-    if (!existingPassword) {
-      const defaultHash = await hashPassword('admin');
-      setSetting('admin_password', defaultHash);
+    // Sync admin password from env var
+    {
+      const adminPwd = env.ADMIN_PASSWORD || 'admin';
+      const adminHash = await hashPassword(adminPwd);
+      const storedHash = getSetting('admin_password');
+      if (adminHash !== storedHash) {
+        setSetting('admin_password', adminHash);
+      }
     }
 
     const url = new URL(request.url);
