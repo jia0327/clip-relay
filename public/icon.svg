@@ -1,15 +1,29 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+<!-- ClipRelay-Horizontal.svg -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 120" fill="none">
   <defs>
-    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#4F46E5;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#7C3AED;stop-opacity:1" />
+    <linearGradient id="g2" x1="0" y1="0" x2="60" y2="60">
+      <stop offset="0%" stop-color="#6366f1"/>
+      <stop offset="100%" stop-color="#8b5cf6"/>
     </linearGradient>
   </defs>
-  <rect x="8" y="8" width="112" height="112" rx="24" fill="url(#grad)"/>
-  <path d="M40 48 L40 80 M40 64 L56 64" stroke="white" stroke-width="8" stroke-linecap="round" fill="none"/>
-  <path d="M88 48 L88 80 M88 64 L72 64" stroke="white" stroke-width="8" stroke-linecap="round" fill="none"/>
-  <path d="M52 56 L76 56 L76 72 L52 72 Z" fill="white" opacity="0.9"/>
-  <path d="M56 60 L72 60 M56 64 L72 64 M56 68 L68 68" stroke="#7C3AED" stroke-width="2" stroke-linecap="round"/>
-  <circle cx="64" cy="48" r="4" fill="#10B981"/>
-  <circle cx="64" cy="80" r="4" fill="#10B981"/>
+
+  <!-- 图标 -->
+  <rect x="0" y="10" width="88" height="100" rx="14" fill="url(#g2)"/>
+  <rect x="24" y="6" width="40" height="12" rx="6" fill="url(#g2)" opacity=".85"/>
+  <rect x="32" y="4" width="24" height="10" rx="5" fill="#fff" opacity=".25"/>
+  <rect x="14" y="36" width="52" height="7" rx="3.5" fill="#fff" opacity=".55"/>
+  <rect x="14" y="50" width="38" height="7" rx="3.5" fill="#fff" opacity=".40"/>
+  <rect x="14" y="64" width="46" height="7" rx="3.5" fill="#fff" opacity=".30"/>
+  <g transform="translate(50,68)" fill="#fff" opacity=".90">
+    <path d="M0 0 L20 0 L20 6 L30 3 L20 0 L20 6 L20 12 L0 12Z"/>
+    <line x1="0" y1="6" x2="14" y2="6" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+  </g>
+
+  <!-- 文字：ClipRelay -->
+  <text x="112" y="72"
+    font-family="'Inter','Segoe UI','Helvetica Neue',Arial,sans-serif"
+    font-size="42" font-weight="700"
+    fill="#e2e8f0" letter-spacing="-0.5">
+    Clip<tspan fill="#6366f1">Relay</tspan>
+  </text>
 </svg>
