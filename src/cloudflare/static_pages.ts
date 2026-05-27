@@ -242,18 +242,6 @@ body {
 [data-theme=\\"dark\\"] .msg-card.local { background: var(--bubble-self); color: var(--bubble-self-text); }
 [data-theme=\\"dark\\"] .msg-card.local:hover { filter: brightness(1.08); }
 
-.msg-card.history-msg {
-  padding: 5px 11px;
-  font-size: 12px;
-  line-height: 1.4;
-  opacity: 0.5;
-  border-radius: 4px 14px 14px 14px;
-  box-shadow: none;
-}
-.msg-card.history-msg.local { border-radius: 14px 4px 14px 14px; }
-.msg-card.history-msg:hover { opacity: 0.85; transform: none; }
-.msg-card.history-msg .msg-meta { margin-top: 1px; font-size: 9px; }
-
 .msg-card.image-card {
   padding: 3px;
   cursor: pointer;
@@ -263,8 +251,6 @@ body {
   overflow: hidden;
 }
 .msg-card.image-card.local { border-radius: 16px; }
-.msg-card.image-card.history-msg { max-width: 170px; }
-.msg-card.image-card.history-msg .msg-image { max-height: 110px; }
 .msg-card .msg-image {
   width: 100%;
   max-height: 240px;
@@ -746,19 +732,27 @@ body {
         }
         roomBanner.style.display = '';
 
-        if (data.messages.length > 0) {
-          // 历史消息放入折叠区
-          for (const m of data.messages) {
-            appendMessageCard(m, false, historySection);
+        const allMessages = data.messages || [];
+        const historyCount = Math.max(0, allMessages.length - 5);
+        const visibleMessages = allMessages.slice(historyCount);
+
+        // 最新 5 条直接显示
+        for (const m of visibleMessages) {
+          appendMessageCard(m, false);
+        }
+
+        // 历史消息放入折叠区
+        if (historyCount > 0) {
+          for (let i = 0; i < historyCount; i++) {
+            appendMessageCard(allMessages[i], false, historySection);
           }
-          // 显示折叠按钮
-          historyFold.innerHTML = \`<hr class="history-sep"><button class="history-fold-btn" id="historyToggle">展开历史消息 (\${data.messages.length}条)</button>\`;
+          historyFold.innerHTML = \`<hr class="history-sep"><button class="history-fold-btn" id="historyToggle">展开历史消息 (\${allMessages.length}条)</button>\`;
           const toggleBtn = historyFold.querySelector('#historyToggle');
           toggleBtn.addEventListener('click', () => {
             const show = historySection.classList.toggle('show');
             toggleBtn.textContent = show
-              ? \`收起历史消息 (\${data.messages.length}条)\`
-              : \`展开历史消息 (\${data.messages.length}条)\`;
+              ? \`收起历史消息 (\${allMessages.length}条)\`
+              : \`展开历史消息 (\${allMessages.length}条)\`;
           });
         }
         scrollToBottom();
@@ -817,12 +811,10 @@ body {
 
 function appendMessageCard(msg, isNew, container) {
     const target = container || msgList;
-    const isHistory = target === historySection;
     const card = document.createElement('div');
     const isImage = msg.msg_type === 'image';
     card.className = 'msg-card'
       + (isNew ? ' new-msg' : '')
-      + (isHistory ? ' history-msg' : '')
       + (isImage ? ' image-card' : '');
     card.dataset.msgId = msg.id;
     card.dataset.msgType = msg.msg_type || 'text';
@@ -909,7 +901,7 @@ function appendMessageCard(msg, isNew, container) {
   function handleExpired() {
     statusBadge.textContent = '已过期';
     statusBadge.className = 'status-badge expired';
-    showToast('房间已过期（30分钟）');
+    showToast('房间已过期');
     msgInput.disabled = true;
     sendBtn.disabled = true;
     imgBtn.disabled = true;

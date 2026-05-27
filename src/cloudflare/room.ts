@@ -80,9 +80,15 @@ export class Room implements DurableObject {
           roomCfg = await this.getRoomConfig(token);
         }
 
-        if (roomCfg && roomCfg.disabled) {
+        if (roomCfg && roomCfg.disabled === 1) {
           this.send(ws, { type: 'error', message: '房间已停用，请联系管理员' });
           ws.close(4002, 'Room disabled');
+          return;
+        }
+
+        if (roomCfg && roomCfg.disabled === 2) {
+          this.send(ws, { type: 'error', message: '房间已过期' });
+          ws.close(4001, 'Room expired');
           return;
         }
 
@@ -210,6 +216,7 @@ export class Room implements DurableObject {
       const expires = created + ttl * 60 * 1000;
       const delay = Math.max(expires - Date.now(), 1000);
 
+      await this.ctx.storage.put('token', token);
       await this.ctx.storage.setAlarm(delay);
     } catch (e: any) {
       console.error('scheduleAlarm error:', e?.message || e);
@@ -217,7 +224,23 @@ export class Room implements DurableObject {
   }
 
   async alarm() {
+    const token = await this.ctx.storage.get('token') as string;
+    if (token) {
+      try {
+        // 标记房间为过期 (disabled = 2)
+        await this.env.DB.prepare('UPDATE rooms SET disabled = 2 WHERE token = ?').bind(token).run();
+        // 删除房间消息
+        await this.env.DB.prepare('DELETE FROM messages WHERE room_token = ?').bind(token).run();
+      } catch (e: any) {
+        console.error('alarm cleanup error:', e?.message || e);
+      }
+    }
+
     const websockets = this.getAllWebSockets();
+    for (const ws of websockets) {
+      this.send(ws, { type: 'room_expired' });
+      ws.close(4001, 'Room expired');
+    }
     if (websockets.length === 0) {
       console.log('Room expired, connections empty');
     }

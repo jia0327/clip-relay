@@ -151,7 +151,7 @@ async function handleChangePassword(request: Request, env: Env): Promise<Respons
 
 async function handleGetRooms(): Promise<Response> {
   const db = (globalThis as any).env.DB;
-  const { results: rooms } = await db.prepare('SELECT * FROM rooms ORDER BY created_at DESC').all();
+  const { results: rooms } = await db.prepare("SELECT * FROM rooms WHERE disabled != 2 ORDER BY created_at DESC").all();
 
   const enriched = [];
   for (const r of (rooms || [])) {
