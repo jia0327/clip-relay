@@ -180,13 +180,14 @@ async function handleCreateRoom(request: Request): Promise<Response> {
   const token = body.token || generateToken(body.name);
   const ttl = body.ttl_minutes !== undefined ? body.ttl_minutes : 30;
   const createdAt = new Date().toISOString();
+  const expiresAt = ttl > 0 ? new Date(Date.now() + ttl * 60000).toISOString() : null;
 
   await (globalThis as any).env.DB.prepare(`
-    INSERT OR REPLACE INTO rooms (token, name, ttl_minutes, created_at, disabled)
-    VALUES (?, ?, ?, ?, 0)
-  `).bind(token, body.name, ttl, createdAt).run();
+    INSERT OR REPLACE INTO rooms (token, name, ttl_minutes, created_at, expires_at, disabled)
+    VALUES (?, ?, ?, ?, ?, 0)
+  `).bind(token, body.name, ttl, createdAt, expiresAt).run();
 
-  return new Response(JSON.stringify({ token, name: body.name, ttl_minutes: ttl, created_at: createdAt, disabled: 0 }), {
+  return new Response(JSON.stringify({ token, name: body.name, ttl_minutes: ttl, created_at: createdAt, expires_at: expiresAt, disabled: 0 }), {
     status: 201,
     headers: { 'Content-Type': 'application/json' }
   });
@@ -259,7 +260,9 @@ export default {
     try {
       await env.DB.exec('CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, room_token TEXT NOT NULL, content TEXT NOT NULL, msg_type TEXT NOT NULL DEFAULT \'text\', filename TEXT, created_at TEXT NOT NULL)');
       await env.DB.exec('CREATE INDEX IF NOT EXISTS idx_messages_room ON messages(room_token, id)');
-      await env.DB.exec('CREATE TABLE IF NOT EXISTS rooms (token TEXT PRIMARY KEY, name TEXT NOT NULL, ttl_minutes INTEGER NOT NULL DEFAULT 30, created_at TEXT NOT NULL, disabled INTEGER NOT NULL DEFAULT 0)');
+      await env.DB.exec('CREATE TABLE IF NOT EXISTS rooms (token TEXT PRIMARY KEY, name TEXT NOT NULL, ttl_minutes INTEGER NOT NULL DEFAULT 30, created_at TEXT NOT NULL, expires_at TEXT, disabled INTEGER NOT NULL DEFAULT 0)');
+      // 兼容旧表：已存在但缺少 expires_at 列时补充
+      try { await env.DB.exec("ALTER TABLE rooms ADD COLUMN expires_at TEXT"); } catch (e: any) {}
       await env.DB.exec('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
     } catch (e: any) {
       console.error('D1 init failed:', e.message);

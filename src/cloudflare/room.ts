@@ -209,17 +209,21 @@ export class Room implements DurableObject {
       const room = await this.getRoomConfig(token);
       if (!room || room.disabled) return;
 
-      const ttl = room.ttl_minutes || 30;
-      if (ttl <= 0) {
-        // 永久房间，取消已有 alarm 防止旧 alarm 误触发
-        await this.ctx.storage.deleteAlarm().catch(() => {});
-        await this.ctx.storage.delete('token').catch(() => {});
-        return;
+      let delay: number;
+      if (room.expires_at) {
+        delay = Math.max(new Date(room.expires_at).getTime() - Date.now(), 1000);
+      } else {
+        // 兼容旧房间未迁移 expires_at
+        const ttl = room.ttl_minutes || 30;
+        if (ttl <= 0) {
+          await this.ctx.storage.deleteAlarm().catch(() => {});
+          await this.ctx.storage.delete('token').catch(() => {});
+          return;
+        }
+        const created = new Date(room.created_at).getTime();
+        const expires = created + ttl * 60 * 1000;
+        delay = Math.max(expires - Date.now(), 1000);
       }
-
-      const created = new Date(room.created_at).getTime();
-      const expires = created + ttl * 60 * 1000;
-      const delay = Math.max(expires - Date.now(), 1000);
 
       await this.ctx.storage.put('token', token);
       await this.ctx.storage.setAlarm(delay);
@@ -233,8 +237,14 @@ export class Room implements DurableObject {
     if (token) {
       try {
         const room = await this.getRoomConfig(token);
-        // 房间已删除/停用/永久 → 不处理
-        if (!room || room.disabled !== 0 || room.ttl_minutes === 0) return;
+        // 房间已删除/停用 → 不处理
+        if (!room || room.disabled !== 0) return;
+        // expires_at 还在未来 → 旧 alarm 误触发
+        if (room.expires_at) {
+          if (new Date(room.expires_at).getTime() > Date.now()) return;
+        } else if (room.ttl_minutes === 0) {
+          return; // 兼容旧永久房间无 expires_at
+        }
 
         await this.env.DB.prepare('UPDATE rooms SET disabled = 2 WHERE token = ?').bind(token).run();
         await this.env.DB.prepare('DELETE FROM messages WHERE room_token = ?').bind(token).run();
@@ -259,10 +269,11 @@ export class Room implements DurableObject {
 
   private async createRoom(token: string, name: string, ttlMinutes: number) {
     const createdAt = new Date().toISOString();
+    const expiresAt = ttlMinutes > 0 ? new Date(Date.now() + ttlMinutes * 60000).toISOString() : null;
     await this.env.DB.prepare(`
-      INSERT OR REPLACE INTO rooms (token, name, ttl_minutes, created_at, disabled)
-      VALUES (?, ?, ?, ?, 0)
-    `).bind(token, name, ttlMinutes, createdAt).run();
+      INSERT OR REPLACE INTO rooms (token, name, ttl_minutes, created_at, expires_at, disabled)
+      VALUES (?, ?, ?, ?, ?, 0)
+    `).bind(token, name, ttlMinutes, createdAt, expiresAt).run();
   }
 
   private async getRoomMessages(token: string, limit = 100) {
@@ -310,10 +321,12 @@ export class Room implements DurableObject {
   private async getExpiresIn(token: string): Promise<number> {
     const room = await this.getRoomConfig(token);
     if (!room) return 0;
-
+    if (room.expires_at) {
+      return Math.max(0, Math.floor((new Date(room.expires_at).getTime() - Date.now()) / 1000));
+    }
+    // 兼容旧房间未迁移 expires_at
     const ttl = room.ttl_minutes;
     if (!ttl || ttl <= 0) return -1;
-
     const created = new Date(room.created_at).getTime();
     const expires = created + ttl * 60 * 1000;
     return Math.max(0, Math.floor((expires - Date.now()) / 1000));

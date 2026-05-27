@@ -283,6 +283,13 @@ body {
 }
 
 /* --- 历史折叠 --- */
+.history-msg .msg-content {
+  color: #1a3a7a;
+  font-weight: 500;
+}
+[data-theme="dark"] .history-msg .msg-content {
+  color: #7a9ff5;
+}
 .history-fold {
   width: 100%;
   text-align: center;
@@ -813,9 +820,11 @@ function appendMessageCard(msg, isNew, container) {
     const target = container || msgList;
     const card = document.createElement('div');
     const isImage = msg.msg_type === 'image';
+    const isHistory = container === historySection;
     card.className = 'msg-card'
       + (isNew ? ' new-msg' : '')
-      + (isImage ? ' image-card' : '');
+      + (isImage ? ' image-card' : '')
+      + (isHistory ? ' history-msg' : '');
     card.dataset.msgId = msg.id;
     card.dataset.msgType = msg.msg_type || 'text';
 
@@ -1473,10 +1482,11 @@ body{
       <th>消息数</th>
       <th>在线</th>
       <th>创建时间</th>
+      <th>过期时间</th>
       <th>操作</th>
     </tr>
   </thead>
-  <tbody id="roomList"><tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:32px">加载中…</td></tr></tbody>
+  <tbody id="roomList"><tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:32px">加载中…</td></tr></tbody>
 </table>
 
 </div>
@@ -1643,7 +1653,7 @@ body{
       if(resp.status===401){showLogin();return}
       const rooms=await resp.json();
       if(rooms.length===0){
-        roomList.innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:32px">暂无房间，请创建</td></tr>';
+        roomList.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:32px">暂无房间，请创建</td></tr>';
         return;
       }
       roomList.innerHTML=rooms.map(r=>{
@@ -1659,6 +1669,7 @@ body{
           <td>\${r.message_count}</td>
           <td>\${r.online_count||0}</td>
           <td style="font-size:12px;color:var(--text-muted)">\${formatTime(r.created_at)}</td>
+          <td style="font-size:12px;color:var(--text-muted)">\${r.expires_at?formatTime(r.expires_at):'<span style="color:var(--text-muted)">—</span>'}</td>
           <td><div class="actions">
             <button class="btn btn-secondary btn-sm" data-copy="\${escapeAttr(link)}">复制链接</button>
             <button class="btn btn-sm btn-toggle" data-toggle="\${escapeAttr(r.token)}">\${toggleLabel}</button>
