@@ -240,28 +240,14 @@ export default {
     (globalThis as any).env = env;
 
     // Auto-initialize D1 tables
-    await env.DB.exec(`
-      CREATE TABLE IF NOT EXISTS messages (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        room_token TEXT NOT NULL,
-        content TEXT NOT NULL,
-        msg_type TEXT NOT NULL DEFAULT 'text',
-        filename TEXT,
-        created_at TEXT NOT NULL
-      );
-      CREATE INDEX IF NOT EXISTS idx_messages_room ON messages(room_token, id);
-      CREATE TABLE IF NOT EXISTS rooms (
-        token TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        ttl_minutes INTEGER NOT NULL DEFAULT 30,
-        created_at TEXT NOT NULL,
-        disabled INTEGER NOT NULL DEFAULT 0
-      );
-      CREATE TABLE IF NOT EXISTS settings (
-        key TEXT PRIMARY KEY,
-        value TEXT NOT NULL
-      );
-    `);
+    try {
+      await env.DB.exec('CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, room_token TEXT NOT NULL, content TEXT NOT NULL, msg_type TEXT NOT NULL DEFAULT \'text\', filename TEXT, created_at TEXT NOT NULL)');
+      await env.DB.exec('CREATE INDEX IF NOT EXISTS idx_messages_room ON messages(room_token, id)');
+      await env.DB.exec('CREATE TABLE IF NOT EXISTS rooms (token TEXT PRIMARY KEY, name TEXT NOT NULL, ttl_minutes INTEGER NOT NULL DEFAULT 30, created_at TEXT NOT NULL, disabled INTEGER NOT NULL DEFAULT 0)');
+      await env.DB.exec('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
+    } catch (e: any) {
+      console.error('D1 init failed:', e.message);
+    }
 
     // Initialize default admin if needed
     const existingPassword = getSetting('admin_password');
