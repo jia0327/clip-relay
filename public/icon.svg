@@ -1,29 +1,28 @@
-<!-- ClipRelay-Horizontal.svg -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 120" fill="none">
+<!-- ClipRelay.svg -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="none">
   <defs>
-    <linearGradient id="g2" x1="0" y1="0" x2="60" y2="60">
+    <linearGradient id="g" x1="0" y1="0" x2="120" y2="120">
       <stop offset="0%" stop-color="#6366f1"/>
       <stop offset="100%" stop-color="#8b5cf6"/>
     </linearGradient>
   </defs>
 
-  <!-- 图标 -->
-  <rect x="0" y="10" width="88" height="100" rx="14" fill="url(#g2)"/>
-  <rect x="24" y="6" width="40" height="12" rx="6" fill="url(#g2)" opacity=".85"/>
-  <rect x="32" y="4" width="24" height="10" rx="5" fill="#fff" opacity=".25"/>
-  <rect x="14" y="36" width="52" height="7" rx="3.5" fill="#fff" opacity=".55"/>
-  <rect x="14" y="50" width="38" height="7" rx="3.5" fill="#fff" opacity=".40"/>
-  <rect x="14" y="64" width="46" height="7" rx="3.5" fill="#fff" opacity=".30"/>
-  <g transform="translate(50,68)" fill="#fff" opacity=".90">
-    <path d="M0 0 L20 0 L20 6 L30 3 L20 0 L20 6 L20 12 L0 12Z"/>
-    <line x1="0" y1="6" x2="14" y2="6" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
-  </g>
+  <!-- 圆角方牌：剪贴板底座 -->
+  <rect x="16" y="10" width="88" height="100" rx="14" fill="url(#g)"/>
 
-  <!-- 文字：ClipRelay -->
-  <text x="112" y="72"
-    font-family="'Inter','Segoe UI','Helvetica Neue',Arial,sans-serif"
-    font-size="42" font-weight="700"
-    fill="#e2e8f0" letter-spacing="-0.5">
-    Clip<tspan fill="#6366f1">Relay</tspan>
-  </text>
+  <!-- 顶部夹扣 -->
+  <rect x="40" y="6" width="40" height="12" rx="6" fill="url(#g)" opacity=".85"/>
+  <rect x="48" y="4" width="24" height="10" rx="5" fill="#fff" opacity=".25"/>
+
+  <!-- "文本行"暗示内容 -->
+  <rect x="30" y="36" width="52" height="7" rx="3.5" fill="#fff" opacity=".55"/>
+  <rect x="30" y="50" width="38" height="7" rx="3.5" fill="#fff" opacity=".40"/>
+  <rect x="30" y="64" width="46" height="7" rx="3.5" fill="#fff" opacity=".30"/>
+
+  <!-- 右下：发送箭头（relay 语义） -->
+  <g transform="translate(66,68)" fill="#fff" opacity=".90">
+    <path d="M0 0 L20 0 L20 6 L30 3 L20 0 L20 6 L20 12 L0 12 Z" rx="0"/>
+    <!-- 尾翼 -->
+    <path d="M0 6 L14 6" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+  </g>
 </svg>
