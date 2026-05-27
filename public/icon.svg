@@ -1,28 +1,20 @@
 <!-- ClipRelay.svg -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="none">
-  <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="120" y2="120">
-      <stop offset="0%" stop-color="#6366f1"/>
-      <stop offset="100%" stop-color="#8b5cf6"/>
-    </linearGradient>
-  </defs>
-
-  <!-- 圆角方牌：剪贴板底座 -->
-  <rect x="16" y="10" width="88" height="100" rx="14" fill="url(#g)"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="currentColor">
+  <!-- 剪贴板背板 -->
+  <rect x="22" y="14" width="76" height="96" rx="12" fill="none" stroke="currentColor" stroke-width="6"/>
 
   <!-- 顶部夹扣 -->
-  <rect x="40" y="6" width="40" height="12" rx="6" fill="url(#g)" opacity=".85"/>
-  <rect x="48" y="4" width="24" height="10" rx="5" fill="#fff" opacity=".25"/>
+  <rect x="40" y="8" width="40" height="16" rx="8" fill="currentColor"/>
+  <rect x="48" y="10" width="24" height="10" rx="5" fill="#fff"/>
 
-  <!-- "文本行"暗示内容 -->
-  <rect x="30" y="36" width="52" height="7" rx="3.5" fill="#fff" opacity=".55"/>
-  <rect x="30" y="50" width="38" height="7" rx="3.5" fill="#fff" opacity=".40"/>
-  <rect x="30" y="64" width="46" height="7" rx="3.5" fill="#fff" opacity=".30"/>
-
-  <!-- 右下：发送箭头（relay 语义） -->
-  <g transform="translate(66,68)" fill="#fff" opacity=".90">
-    <path d="M0 0 L20 0 L20 6 L30 3 L20 0 L20 6 L20 12 L0 12 Z" rx="0"/>
-    <!-- 尾翼 -->
-    <path d="M0 6 L14 6" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
-  </g>
+  <!-- 闪电路径（Relay 语义：能量/传输） -->
+  <polygon points="
+    66,36
+    50,66
+    60,66
+    54,88
+    78,56
+    66,56
+    74,36
+  "/>
 </svg>
