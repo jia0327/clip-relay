@@ -22,16 +22,18 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '24'
+          npm-version: '10'
+          cache: 'npm'
 
       - name: Install Dependencies
         run: |
           cd deploy/cloudflare
-          npm install
+          npm install --legacy-peer-deps
 
       - name: Update wrangler.toml with D1 ID
         run: |
           cd deploy/cloudflare
-          sed -i 's/D1_DB_ID/'${{ secrets.D1_DATABASE_ID }}'/' wrangler.toml
+          sed -i "s/D1_DB_ID/${{ secrets.D1_DATABASE_ID }}/g" wrangler.toml
 
       - name: Deploy to Cloudflare
         run: |
