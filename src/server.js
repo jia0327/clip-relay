@@ -8,6 +8,9 @@ const {
   createRoom, getRoomConfig, listRooms, deleteRoom, countRoomMessages, toggleRoom,
   getSetting, setSetting, initDefaultAdmin
 } = require('./db');
+const { createSession, validateSession: _validateSession } = require('./shared/session');
+const { checkRateLimit, clearRateLimit } = require('./shared/rate-limit');
+const { generateToken } = require('./shared/token');
 const { RoomManager } = require('./room');
 
 // --- 配置 ---
@@ -83,68 +86,12 @@ function readBody(req) {
   });
 }
 
-// --- Session 管理 ---
-const sessions = new Map();
-const SESSION_TTL = 24 * 60 * 60 * 1000;
-
-function createSession() {
-  const token = crypto.randomBytes(32).toString('hex');
-  sessions.set(token, { createdAt: Date.now() });
-  return token;
-}
-
-function validateSession(req) {
-  const auth = req.headers['authorization'] || '';
-  const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
-  if (!token || !sessions.has(token)) return false;
-  const s = sessions.get(token);
-  if (Date.now() - s.createdAt > SESSION_TTL) {
-    sessions.delete(token);
-    return false;
-  }
-  return true;
-}
-
 function hashPassword(pw) {
   return crypto.createHash('sha256').update(pw).digest('hex');
 }
 
-// 定期清理过期 session
-setInterval(() => {
-  for (const [token, s] of sessions) {
-    if (Date.now() - s.createdAt > SESSION_TTL) sessions.delete(token);
-  }
-}, 3600 * 1000);
-
-// --- 登录限流 ---
-const rateLimitMap = new Map(); // ip → { count, firstAttempt, blockedUntil }
-const RATE_LIMIT_MAX = 5;       // 最多尝试次数
-const RATE_LIMIT_WINDOW = 60000; // 1分钟窗口
-const RATE_LIMIT_BLOCK = 300000; // 封禁5分钟
-
-function checkRateLimit(ip) {
-  const now = Date.now();
-  let entry = rateLimitMap.get(ip);
-  if (!entry) {
-    entry = { count: 0, firstAttempt: now, blockedUntil: 0 };
-    rateLimitMap.set(ip, entry);
-  }
-  // 封禁中
-  if (entry.blockedUntil > now) {
-    return { blocked: true, remainingSeconds: Math.ceil((entry.blockedUntil - now) / 1000) };
-  }
-  // 窗口过期，重置
-  if (now - entry.firstAttempt > RATE_LIMIT_WINDOW) {
-    entry.count = 0;
-    entry.firstAttempt = now;
-  }
-  entry.count++;
-  if (entry.count > RATE_LIMIT_MAX) {
-    entry.blockedUntil = now + RATE_LIMIT_BLOCK;
-    const remainSec = Math.ceil(RATE_LIMIT_BLOCK / 1000);
-    return { blocked: true, remainingSeconds: remainSec, message: `尝试次数过多，请${remainSec}秒后再试。如忘记密码，请使用 RESET_KEY。` };
-  }
-  return { blocked: false, remaining: RATE_LIMIT_MAX - entry.count };
+function validateSession(req) {
+  return _validateSession(req.headers['authorization'] || '');
 }
 
 function getClientIP(req) {
@@ -154,15 +101,6 @@ function getClientIP(req) {
     || 'unknown';
 }
 
-// 定期清理限流记录
-setInterval(() => {
-  const now = Date.now();
-  for (const [ip, entry] of rateLimitMap) {
-    if (entry.blockedUntil < now && now - entry.firstAttempt > RATE_LIMIT_WINDOW) {
-      rateLimitMap.delete(ip);
-    }
-  }
-}, 300000);
 
 // --- HTTP Server ---
 const server = http.createServer(async (req, res) => {
@@ -226,14 +164,14 @@ const server = http.createServer(async (req, res) => {
       if (config.resetKey && body.password === config.resetKey) {
         setSetting('admin_password', hashPassword('admin'));
         const sessionToken = createSession();
-        rateLimitMap.delete(ip);
+        clearRateLimit(ip);
         jsonResponse(res, { token: sessionToken, recovered: true, message: '密码已重置为 admin，请及时修改密码' });
         return;
       }
       jsonResponse(res, { error: `密码错误，还剩${limit.remaining}次尝试` }, 401);
       return;
     }
-    rateLimitMap.delete(ip);
+    clearRateLimit(ip);
     const sessionToken = createSession();
     jsonResponse(res, { token: sessionToken });
     return;
@@ -525,20 +463,6 @@ setInterval(() => {
 }, CLEANUP_INTERVAL);
 
 // --- 工具函数 ---
-function generateToken(prefix) {
-  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-  let result = '';
-  for (let i = 0; i < 12; i++) {
-    result += chars[Math.floor(Math.random() * chars.length)];
-  }
-  if (prefix) {
-    // 清理房间名：只保留字母数字和中文，空格转连字符
-    const clean = prefix.replace(/[^a-zA-Z0-9一-龥]/g, '').replace(/\s+/g, '-').substring(0, 20);
-    return clean + '-' + result;
-  }
-  return result.slice(0, 4) + '-' + result.slice(4, 8) + '-' + result.slice(8, 12);
-}
-
 // --- 启动 ---
 async function start() {
   await initDB();

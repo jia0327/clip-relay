@@ -2,6 +2,10 @@ import type { DurableObjectNamespace, D1Database } from '@cloudflare/workers-typ
 import { Room } from './room';
 import { INDEX_HTML, ADMIN_HTML } from './static_pages';
 
+const { createSession, validateSession } = require('../shared/session');
+const { checkRateLimit, clearRateLimit } = require('../shared/rate-limit');
+const { generateToken } = require('../shared/token');
+
 export interface Env {
   DB: D1Database;
   ROOM: DurableObjectNamespace;
@@ -10,59 +14,13 @@ export interface Env {
   RESET_KEY?: string;
 }
 
-// --- Session 管理 ---
-const sessions = new Map<string, { createdAt: number }>();
-const SESSION_TTL = 24 * 60 * 60 * 1000;
-
-function createSession(): string {
-  const token = crypto.randomUUID();
-  sessions.set(token, { createdAt: Date.now() });
-  return token;
-}
-
-function validateSession(auth: string): boolean {
-  const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
-  if (!token || !sessions.has(token)) return false;
-  const s = sessions.get(token)!;
-  if (Date.now() - s.createdAt > SESSION_TTL) {
-    sessions.delete(token);
-    return false;
-  }
-  return true;
-}
-
 function hashPassword(pw: string): string {
   return crypto.subtle.digest('SHA-256', new TextEncoder().encode(pw))
     .then(buf => Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join(''));
 }
 
-// --- Rate Limiting ---
-const rateLimitMap = new Map<string, { count: number; firstAttempt: number; blockedUntil: number }>();
-const RATE_LIMIT_MAX = 5;
-const RATE_LIMIT_WINDOW = 60000;
-const RATE_LIMIT_BLOCK = 300000;
-
-function checkRateLimit(ip: string): { blocked: boolean; remaining?: number; remainingSeconds?: number; message?: string } {
-  const now = Date.now();
-  let entry = rateLimitMap.get(ip);
-  if (!entry) {
-    entry = { count: 0, firstAttempt: now, blockedUntil: 0 };
-    rateLimitMap.set(ip, entry);
-  }
-  if (entry.blockedUntil > now) {
-    return { blocked: true, remainingSeconds: Math.ceil((entry.blockedUntil - now) / 1000) };
-  }
-  if (now - entry.firstAttempt > RATE_LIMIT_WINDOW) {
-    entry.count = 0;
-    entry.firstAttempt = now;
-  }
-  entry.count++;
-  if (entry.count > RATE_LIMIT_MAX) {
-    entry.blockedUntil = now + RATE_LIMIT_BLOCK;
-    const remainSec = Math.ceil(RATE_LIMIT_BLOCK / 1000);
-    return { blocked: true, remainingSeconds: remainSec, message: `尝试次数过多，请${remainSec}秒后再试` };
-  }
-  return { blocked: false, remaining: RATE_LIMIT_MAX - entry.count };
+function checkRateLimitWrapper(ip: string): { blocked: boolean; remaining?: number; remainingSeconds?: number; message?: string } {
+  return checkRateLimit(ip);
 }
 
 function getClientIP(request: Request): string {
@@ -100,7 +58,7 @@ async function handleLogin(request: Request, env: Env): Promise<Response> {
 
   // 密码匹配
   if (inputHash === storedHash) {
-    rateLimitMap.delete(ip);
+    clearRateLimit(ip);
     const sessionToken = createSession();
     return new Response(JSON.stringify({ token: sessionToken }), {
       headers: { 'Content-Type': 'application/json' }
@@ -110,7 +68,7 @@ async function handleLogin(request: Request, env: Env): Promise<Response> {
   // 恢复：匹配 RESET_KEY → 重置为 admin
   if (env.RESET_KEY && body.password === env.RESET_KEY) {
     await setSetting('admin_password', await hashPassword('admin'));
-    rateLimitMap.delete(ip);
+    clearRateLimit(ip);
     const sessionToken = createSession();
     return new Response(JSON.stringify({ token: sessionToken, recovered: true, message: '密码已重置为 admin，请及时修改密码' }), {
       headers: { 'Content-Type': 'application/json' }
@@ -236,19 +194,6 @@ async function handleToggleRoom(request: Request): Promise<Response> {
   await (globalThis as any).env.DB.prepare('UPDATE rooms SET disabled = ? WHERE token = ?').bind(newDisabled, body.token).run();
 
   return new Response(JSON.stringify({ ok: true, disabled: newDisabled }), { headers: { 'Content-Type': 'application/json' } });
-}
-
-function generateToken(prefix?: string): string {
-  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-  let result = '';
-  for (let i = 0; i < 12; i++) {
-    result += chars[Math.floor(Math.random() * chars.length)];
-  }
-  if (prefix) {
-    const clean = prefix.replace(/[^a-zA-Z0-9一-龥]/g, '').replace(/\s+/g, '-').substring(0, 20);
-    return clean + '-' + result;
-  }
-  return result.slice(0, 4) + '-' + result.slice(4, 8) + '-' + result.slice(8, 12);
 }
 
 // --- Main Handler ---
