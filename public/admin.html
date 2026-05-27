@@ -218,7 +218,7 @@ body{
     <button class="btn btn-primary" id="loginBtn">登录</button>
     <p class="login-error" id="loginError"></p>
     <p style="font-size:12px;color:var(--accent);margin-top:16px;cursor:pointer;text-decoration:underline" id="forgotPwd" onclick="this.style.display='none';document.getElementById('recoveryHint').style.display='block'">忘记密码？</p>
-    <p id="recoveryHint" style="display:none;font-size:12px;color:var(--text-secondary);margin-top:8px;background:var(--bg);padding:12px 14px;border-radius:6px;text-align:left;line-height:1.7">忘记密码后，使用<strong>恢复码</strong>作为密码登录即可自动重置密码。<br><br>· 登录后台 → 恢复码卡片 → 查看恢复码<br>· 每个恢复码仅可使用一次<br>· 恢复码用完后可重新生成</p>
+    <p id="recoveryHint" style="display:none;font-size:12px;color:var(--text-secondary);margin-top:8px;background:var(--bg);padding:12px 14px;border-radius:6px;text-align:left;line-height:1.7">忘记密码后，使用<strong>重置密钥（RESET_KEY）</strong>作为密码登录即可重置为 admin。<br><br>· 本地/Docker：查看 <code>config/config.json</code> 的 <code>resetKey</code> 字段<br>· Cloudflare：查看 Dashboard → Variables 中的 <code>RESET_KEY</code><br><br>密码重置后请及时修改密码。恢复码亦可在登录后后台查看。</p>
   </div>
 </div>
 
@@ -265,7 +265,7 @@ body{
 <!-- 恢复码 -->
 <div class="pwd-card">
   <h2>恢复码 <span class="badge badge-permanent" id="rcCount" style="font-size:11px;vertical-align:middle;margin-left:6px">5 个可用</span></h2>
-  <p style="font-size:12px;color:var(--text-secondary);margin:8px 0">恢复码可一次性替代管理员密码登录，用完即作废。</p>
+  <p style="font-size:12px;color:var(--text-secondary);margin:8px 0">恢复码可一次性替代管理员密码登录，用完即作废。也可在 <code>config/config.json</code>（本地）或 Cloudflare Dashboard Variables（Cloudflare）中查看。</p>
   <div id="rcList" style="font-family:monospace;font-size:13px;line-height:1.8;margin-bottom:10px;display:none"></div>
   <button class="btn btn-secondary btn-sm" id="showRcBtn">查看恢复码</button>
   <button class="btn btn-secondary btn-sm" id="regenerateRcBtn" style="margin-left:8px">重新生成</button>
@@ -428,6 +428,7 @@ body{
       loginOverlay.style.display='none';
       mainPanel.style.display='';
       loginError.classList.remove('show');
+      if(data.recovered && data.message) alert(data.message);
       loadRooms();
     }catch(e){showLoginError('网络错误，请检查连接')}
   }
@@ -456,7 +457,7 @@ body{
       const data=await resp.json();
       if(data.error){toast(data.error);return}
       toast('密码已修改');
-      alert('密码已修改。如忘记新密码，可用恢复码恢复登录。');
+      alert('密码已修改。如忘记新密码，可用 RESET_KEY 或恢复码恢复登录。');
       oldPwd.value='';newPwd.value='';
     }catch(e){toast('修改失败')}
   });

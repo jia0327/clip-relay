@@ -14,7 +14,8 @@ new_sqlite_classes = ["Room"]
 [vars]
 MAX_IMAGE_SIZE = "5242880"
 DEFAULT_TOKEN = "clip-relay"
-INIT_KEY = "admin"
+RESET_KEY = "7b89c5511cb8e6ec8abd4a3eba3a7388"
+RECOVERY_CODES = "nxvz-n59m-u249,nr83-kybc-hu52,n8uh-tfcb-tg3r,3bv6-hk6v-nrjc,uhmw-c23a-6dd8"
 [[d1_databases]]
 binding = "DB"
 database_name = "clip-relay"

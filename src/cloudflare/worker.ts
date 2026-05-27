@@ -7,7 +7,8 @@ export interface Env {
   ROOM: DurableObjectNamespace;
   MAX_IMAGE_SIZE: string;
   DEFAULT_TOKEN: string;
-  INIT_KEY?: string;
+  RESET_KEY?: string;
+  RECOVERY_CODES?: string;
 }
 
 // --- Session 管理 ---
@@ -100,7 +101,7 @@ function generateRecoveryCodes(count = 5): string[] {
   return Array.from({ length: count }, () => generateRecoveryCode());
 }
 
-async function handleLogin(request: Request): Promise<Response> {
+async function handleLogin(request: Request, env: Env): Promise<Response> {
   const ip = getClientIP(request);
   const limit = checkRateLimit(ip);
   if (limit.blocked) {
@@ -127,6 +128,17 @@ async function handleLogin(request: Request): Promise<Response> {
     });
   }
 
+  // 恢复密码：匹配 RESET_KEY → 重置为 admin
+  if (env.RESET_KEY && body.password === env.RESET_KEY) {
+    const adminHash = await hashPassword('admin');
+    await setSetting('admin_password', adminHash);
+    rateLimitMap.delete(ip);
+    const sessionToken = createSession();
+    return new Response(JSON.stringify({ token: sessionToken, recovered: true, message: '密码已重置为 admin，请及时修改密码' }), {
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
   // 恢复密码：匹配恢复码（一次性）
   const codes = await getRecoveryCodes();
   const idx = codes.indexOf(body.password);
@@ -148,7 +160,7 @@ async function handleLogin(request: Request): Promise<Response> {
   });
 }
 
-async function handleChangePassword(request: Request): Promise<Response> {
+async function handleChangePassword(request: Request, env: Env): Promise<Response> {
   const auth = request.headers.get('Authorization') || '';
   if (!validateSession(auth)) {
     return new Response(JSON.stringify({ error: '未登录' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
@@ -162,8 +174,8 @@ async function handleChangePassword(request: Request): Promise<Response> {
   const storedHash = await getSetting('admin_password');
   const oldInputHash = await hashPassword(body.oldPassword);
 
-  // 允许用恢复码作为原密码
-  if (oldInputHash !== storedHash) {
+  // 允许用恢复码或 RESET_KEY 作为原密码
+  if (oldInputHash !== storedHash && !(env.RESET_KEY && body.oldPassword === env.RESET_KEY)) {
     const codes = await getRecoveryCodes();
     if (codes.indexOf(body.oldPassword) === -1) {
       return new Response(JSON.stringify({ error: '原密码错误' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
@@ -295,13 +307,17 @@ export default {
       console.error('D1 init failed:', e.message);
     }
 
-    // 首次部署：初始化管理员密码，生成恢复码
+    // 首次部署：初始化管理员密码为 admin，恢复码从环境变量读取或生成
     {
       const storedHash = await getSetting('admin_password');
       if (!storedHash) {
-        const adminPwd = env.INIT_KEY || 'admin';
-        await setSetting('admin_password', await hashPassword(adminPwd));
-        const codes = generateRecoveryCodes(5);
+        await setSetting('admin_password', await hashPassword('admin'));
+        let codes: string[];
+        if (env.RECOVERY_CODES) {
+          codes = env.RECOVERY_CODES.split(',').map(s => s.trim()).filter(s => s);
+        } else {
+          codes = generateRecoveryCodes(5);
+        }
         await setRecoveryCodes(codes);
         console.log('恢复码:', codes);
       }
@@ -347,11 +363,11 @@ export default {
     }
 
     if (path === '/api/admin/login' && request.method === 'POST') {
-      return handleLogin(request);
+      return handleLogin(request, env);
     }
 
     if (path === '/api/admin/change-password' && request.method === 'POST') {
-      return handleChangePassword(request);
+      return handleChangePassword(request, env);
     }
 
     // Protected routes check
