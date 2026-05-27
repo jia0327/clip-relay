@@ -7,8 +7,7 @@ export interface Env {
   ROOM: DurableObjectNamespace;
   MAX_IMAGE_SIZE: string;
   DEFAULT_TOKEN: string;
-  ADMIN_PASSWORD?: string;
-  RECOVERY_CODES?: string;
+  INIT_KEY?: string;
 }
 
 // --- Session 管理 ---
@@ -101,7 +100,7 @@ function generateRecoveryCodes(count = 5): string[] {
   return Array.from({ length: count }, () => generateRecoveryCode());
 }
 
-async function handleLogin(request: Request, env: Env): Promise<Response> {
+async function handleLogin(request: Request): Promise<Response> {
   const ip = getClientIP(request);
   const limit = checkRateLimit(ip);
   if (limit.blocked) {
@@ -149,7 +148,7 @@ async function handleLogin(request: Request, env: Env): Promise<Response> {
   });
 }
 
-async function handleChangePassword(request: Request, env: Env): Promise<Response> {
+async function handleChangePassword(request: Request): Promise<Response> {
   const auth = request.headers.get('Authorization') || '';
   if (!validateSession(auth)) {
     return new Response(JSON.stringify({ error: '未登录' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
@@ -296,20 +295,13 @@ export default {
       console.error('D1 init failed:', e.message);
     }
 
-    // 首次部署时写入默认密码，不覆盖用户已修改的密码
+    // 首次部署：初始化管理员密码，生成恢复码
     {
-      const adminPwd = env.ADMIN_PASSWORD || 'admin';
-      const adminHash = await hashPassword(adminPwd);
       const storedHash = await getSetting('admin_password');
       if (!storedHash) {
-        await setSetting('admin_password', adminHash);
-        // 首次部署时生成恢复码
-        let codes: string[];
-        if (env.RECOVERY_CODES) {
-          codes = env.RECOVERY_CODES.split(',').map(s => s.trim()).filter(s => s);
-        } else {
-          codes = generateRecoveryCodes(5);
-        }
+        const adminPwd = env.INIT_KEY || 'admin';
+        await setSetting('admin_password', await hashPassword(adminPwd));
+        const codes = generateRecoveryCodes(5);
         await setRecoveryCodes(codes);
         console.log('恢复码:', codes);
       }
@@ -355,11 +347,11 @@ export default {
     }
 
     if (path === '/api/admin/login' && request.method === 'POST') {
-      return handleLogin(request, env);
+      return handleLogin(request);
     }
 
     if (path === '/api/admin/change-password' && request.method === 'POST') {
-      return handleChangePassword(request, env);
+      return handleChangePassword(request);
     }
 
     // Protected routes check
