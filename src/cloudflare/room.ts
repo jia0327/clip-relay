@@ -34,15 +34,22 @@ export class Room implements DurableObject {
     const { 0: clientWs, 1: serverWs } = new WebSocketPair();
     console.log('Created WebSocketPair');
 
-    serverWs.addEventListener('message', (event) => {
-      console.log('Received message:', event.data.toString().substring(0, 100));
-      this.handleMessage(token, serverWs, event.data.toString());
-    });
-
     this.ctx.acceptWebSocket(serverWs);
     console.log('Accepted WebSocket, total:', this.ctx.getWebSockets().length);
 
-    await this.scheduleAlarm(token);
+    serverWs.addEventListener('message', (event) => {
+      console.log('Received message:', event.data.toString().substring(0, 100));
+      this.handleMessage(token, serverWs, event.data.toString()).catch(err => {
+        console.error('handleMessage error:', err?.message || err);
+      });
+    });
+
+    try {
+      await this.scheduleAlarm(token);
+    } catch (e: any) {
+      console.error('scheduleAlarm error:', e?.message || e);
+    }
+    console.log('WebSocket upgrade complete, returning 101');
 
     return new Response(null, { status: 101, webSocket: clientWs });
   }
@@ -185,20 +192,20 @@ export class Room implements DurableObject {
   }
 
   private async scheduleAlarm(token: string) {
-    const room = await this.getRoomConfig(token);
-    if (!room || room.disabled) return;
-
-    const ttl = room.ttl_minutes || 30;
-    if (ttl <= 0) return;
-
-    const created = new Date(room.created_at).getTime();
-    const expires = created + ttl * 60 * 1000;
-    const delay = Math.max(expires - Date.now(), 1000);
-
     try {
+      const room = await this.getRoomConfig(token);
+      if (!room || room.disabled) return;
+
+      const ttl = room.ttl_minutes || 30;
+      if (ttl <= 0) return;
+
+      const created = new Date(room.created_at).getTime();
+      const expires = created + ttl * 60 * 1000;
+      const delay = Math.max(expires - Date.now(), 1000);
+
       await this.ctx.storage.setAlarm(delay);
-    } catch (e) {
-      console.error('Failed to set alarm:', e);
+    } catch (e: any) {
+      console.error('scheduleAlarm error:', e?.message || e);
     }
   }
 
