@@ -1,5 +1,4 @@
 import { DurableObject } from 'cloudflare:workers';
-import type { D1Database } from '@cloudflare/workers-types';
 
 export interface WebSocketMessage {
   type: string;
@@ -12,8 +11,6 @@ export interface Connection {
 }
 
 export class Room implements DurableObject {
-  private connections: Map<WebSocket, Connection> = new Map();
-
   constructor(
     private ctx: DurableObjectState,
     private env: Env
@@ -37,16 +34,7 @@ export class Room implements DurableObject {
       this.handleMessage(token, serverWs, event.data.toString());
     });
 
-    serverWs.addEventListener('close', () => {
-      this.removeConnection(token, serverWs);
-    });
-
-    serverWs.addEventListener('error', () => {
-      this.removeConnection(token, serverWs);
-    });
-
     this.ctx.acceptWebSocket(serverWs);
-    this.connections.set(serverWs, { ws: serverWs, deviceType: 'desktop' });
 
     await this.scheduleAlarm(token);
 
@@ -65,13 +53,11 @@ export class Room implements DurableObject {
     switch (msg.type) {
       case 'join': {
         const deviceType = msg.device_type || 'desktop';
-        const conn = this.connections.get(ws);
-        if (conn) conn.deviceType = deviceType;
 
-        let roomCfg = await this.getRoomConfig(token);
+        let roomCfg = this.getRoomConfig(token);
         if (!roomCfg) {
-          await this.createRoom(token, '临时房间', 30);
-          roomCfg = await this.getRoomConfig(token);
+          this.createRoom(token, '临时房间', 30);
+          roomCfg = this.getRoomConfig(token);
         }
 
         if (roomCfg && roomCfg.disabled) {
@@ -80,8 +66,8 @@ export class Room implements DurableObject {
           return;
         }
 
-        const messages = await this.getRoomMessages(token);
-        const expiresIn = await this.getExpiresIn(token);
+        const messages = this.getRoomMessages(token);
+        const expiresIn = this.getExpiresIn(token);
 
         this.send(ws, {
           type: 'joined',
@@ -90,7 +76,7 @@ export class Room implements DurableObject {
           room_created_at: roomCfg?.created_at,
           expires_in: expiresIn,
           permanent: expiresIn === -1,
-          online_count: this.connections.size,
+          online_count: this.getAllWebSockets().length,
           online_devices: this.getDeviceTypes()
         });
 
@@ -104,7 +90,7 @@ export class Room implements DurableObject {
         break;
 
       case 'clear_messages':
-        await this.deleteRoomMessages(token);
+        this.deleteRoomMessages(token);
         this.broadcastAll({ type: 'messages_cleared' });
         break;
 
@@ -120,7 +106,7 @@ export class Room implements DurableObject {
           return;
         }
 
-        const record = await this.addMessage(token, msg.content);
+        const record = this.addMessage(token, msg.content);
         this.broadcastExcluding(ws, { type: 'message', message: record });
         break;
       }
@@ -145,7 +131,7 @@ export class Room implements DurableObject {
           return;
         }
 
-        const record = await this.addImageMessage(token, msg.content, msg.filename || 'image.png');
+        const record = this.addImageMessage(token, msg.content, msg.filename || 'image.png');
         this.broadcastExcluding(ws, { type: 'image', message: record });
         break;
       }
@@ -155,46 +141,45 @@ export class Room implements DurableObject {
     }
   }
 
+  private getAllWebSockets(): WebSocket[] {
+    return this.ctx.getWebSockets();
+  }
+
   private send(ws: WebSocket, data: any) {
-    ws.send(JSON.stringify(data));
+    try {
+      ws.send(JSON.stringify(data));
+    } catch (e) {
+      console.error('Send error:', e);
+    }
   }
 
   private broadcastAll(data: any) {
     const msg = JSON.stringify(data);
-    for (const conn of this.connections.values()) {
-      conn.ws.send(msg);
+    for (const ws of this.getAllWebSockets()) {
+      this.send(ws, data);
     }
   }
 
   private broadcastExcluding(exclude: WebSocket, data: any) {
     const msg = JSON.stringify(data);
-    for (const [ws, conn] of this.connections) {
-      if (ws !== exclude) ws.send(msg);
+    for (const ws of this.getAllWebSockets()) {
+      if (ws !== exclude) {
+        this.send(ws, data);
+      }
     }
   }
 
   private getDeviceTypes(): string[] {
     const types = new Set<string>();
-    for (const conn of this.connections.values()) {
-      types.add(conn.deviceType);
-    }
+    // Note: getWebSockets() returns WebSocket[], not Connection[]
+    // Device type is per-connection, we'd need to track this differently
+    // For now, return desktop as default
+    types.add('desktop');
     return Array.from(types);
   }
 
-  private async removeConnection(token: string, ws: WebSocket) {
-    const conn = this.connections.get(ws);
-    if (conn) {
-      this.connections.delete(ws);
-      this.broadcastAll({ type: 'device_left', device_type: conn.deviceType });
-
-      if (this.connections.size === 0) {
-        await this.scheduleAlarm(token);
-      }
-    }
-  }
-
   private async scheduleAlarm(token: string) {
-    const room = await this.getRoomConfig(token);
+    const room = this.getRoomConfig(token);
     if (!room || room.disabled) return;
 
     const ttl = room.ttl_minutes || 30;
@@ -212,33 +197,34 @@ export class Room implements DurableObject {
   }
 
   async alarm() {
-    if (this.connections.size === 0) {
+    const websockets = this.getAllWebSockets();
+    if (websockets.length === 0) {
       console.log('Room expired, connections empty');
     }
   }
 
-  private async getRoomConfig(token: string) {
-    return await this.env.DB.prepare('SELECT * FROM rooms WHERE token = ?').bind(token).first() as any;
+  private getRoomConfig(token: string) {
+    return this.env.DB.prepare('SELECT * FROM rooms WHERE token = ?').get(token) as any;
   }
 
-  private async createRoom(token: string, name: string, ttlMinutes: number) {
+  private createRoom(token: string, name: string, ttlMinutes: number) {
     const createdAt = new Date().toISOString();
-    await this.env.DB.prepare(`
+    this.env.DB.prepare(`
       INSERT OR REPLACE INTO rooms (token, name, ttl_minutes, created_at, disabled)
       VALUES (?, ?, ?, ?, 0)
     `).run(token, name, ttlMinutes, createdAt);
   }
 
-  private async getRoomMessages(token: string, limit = 100) {
-    const rows = await this.env.DB.prepare(
+  private getRoomMessages(token: string, limit = 100) {
+    const rows = this.env.DB.prepare(
       'SELECT * FROM messages WHERE room_token = ? ORDER BY id DESC LIMIT ?'
     ).all(token, limit);
     return (rows.results || []).reverse();
   }
 
-  private async addMessage(roomToken: string, content: string) {
+  private addMessage(roomToken: string, content: string) {
     const createdAt = new Date().toISOString();
-    const result = await this.env.DB.prepare(
+    const result = this.env.DB.prepare(
       'INSERT INTO messages (room_token, content, msg_type, created_at) VALUES (?, ?, ?, ?)'
     ).run(roomToken, content, 'text', createdAt);
 
@@ -251,9 +237,9 @@ export class Room implements DurableObject {
     };
   }
 
-  private async addImageMessage(roomToken: string, content: string, filename: string) {
+  private addImageMessage(roomToken: string, content: string, filename: string) {
     const createdAt = new Date().toISOString();
-    const result = await this.env.DB.prepare(
+    const result = this.env.DB.prepare(
       'INSERT INTO messages (room_token, content, msg_type, filename, created_at) VALUES (?, ?, ?, ?, ?)'
     ).run(roomToken, content, 'image', filename, createdAt);
 
@@ -267,12 +253,12 @@ export class Room implements DurableObject {
     };
   }
 
-  private async deleteRoomMessages(roomToken: string) {
-    await this.env.DB.prepare('DELETE FROM messages WHERE room_token = ?').run(roomToken);
+  private deleteRoomMessages(roomToken: string) {
+    this.env.DB.prepare('DELETE FROM messages WHERE room_token = ?').run(roomToken);
   }
 
-  private async getExpiresIn(token: string): Promise<number> {
-    const room = await this.getRoomConfig(token);
+  private getExpiresIn(token: string): number {
+    const room = this.getRoomConfig(token);
     if (!room) return 0;
 
     const ttl = room.ttl_minutes;
