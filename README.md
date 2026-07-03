@@ -26,7 +26,7 @@
 
 ## 在线演示
 
-> **演示房间**：[cliprelay.itellme.icu](https://cliprelay.itellme.icu/?token=demo-vd7ftpaiyyue)
+> **演示房间**：[cliprelay.onlydev.ccwu.cc](https://cliprelay.onlydev.ccwu.cc/?token=demo-vd7ftpaiyyue)
 
 用两个设备打开同一链接，测试实时消息接力。
 
