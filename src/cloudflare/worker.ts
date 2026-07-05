@@ -202,6 +202,18 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     (globalThis as any).env = env;
 
+    const url = new URL(request.url);
+    const path = url.pathname;
+
+    if (path === '/api/health' && request.method === 'GET') {
+      return new Response(JSON.stringify({ ok: true, service: 'clip-relay' }), {
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-store',
+        },
+      });
+    }
+
     // Auto-initialize D1 tables
     try {
       await env.DB.exec('CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, room_token TEXT NOT NULL, content TEXT NOT NULL, msg_type TEXT NOT NULL DEFAULT \'text\', filename TEXT, created_at TEXT NOT NULL)');
@@ -225,9 +237,6 @@ export default {
     }
 
     await cleanupExpiredSessions();
-
-    const url = new URL(request.url);
-    const path = url.pathname;
 
     // CORS
     if (request.method === 'OPTIONS') {

@@ -120,6 +120,11 @@ const server = http.createServer(async (req, res) => {
   }
 
   // --- API ---
+  if (urlPath === '/api/health' && req.method === 'GET') {
+    jsonResponse(res, { ok: true, service: 'clip-relay' });
+    return;
+  }
+
   if (urlPath === '/api/config') {
     const os = require('os');
     const ifs = os.networkInterfaces();
