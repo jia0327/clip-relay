@@ -120,7 +120,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   // --- API ---
-  if (urlPath === '/api/health' && req.method === 'GET') {
+  if ((urlPath === '/api/health' || urlPath === '/health') && req.method === 'GET') {
     jsonResponse(res, { ok: true, service: 'clip-relay' });
     return;
   }

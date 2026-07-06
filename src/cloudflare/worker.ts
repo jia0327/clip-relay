@@ -205,7 +205,7 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
 
-    if (path === '/api/health' && request.method === 'GET') {
+    if ((path === '/api/health' || path === '/health') && request.method === 'GET') {
       return new Response(JSON.stringify({ ok: true, service: 'clip-relay' }), {
         headers: {
           'Content-Type': 'application/json',
